@@ -14,6 +14,8 @@ EXPECTED_KEYS = [
 ]
 
 def pdf_to_images(data):
+    """Convert PDF pages to JPEG images."""
+    # Try PyMuPDF first
     try:
         import fitz
         doc = fitz.open(stream=data, filetype="pdf")
@@ -22,11 +24,13 @@ def pdf_to_images(data):
             pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
             images.append(pix.tobytes("jpeg"))
         doc.close()
-        logging.info(f"PyMuPDF: {len(images)} pages")
-        return images
+        if images:
+            logging.info(f"PyMuPDF: {len(images)} pages")
+            return images
     except Exception as e:
-        logging.warning(f"PyMuPDF failed: {e}")
+        logging.warning(f"PyMuPDF: {e}")
 
+    # Try Pillow
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(data))
@@ -35,16 +39,17 @@ def pdf_to_images(data):
             try: img.seek(i)
             except EOFError: break
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, "JPEG", quality=70)
+            img.convert("RGB").save(buf, "JPEG", quality=75)
             images.append(buf.getvalue())
         if images:
-            logging.info(f"Pillow: {len(images)} pages")
+            logging.info(f"Pillow PDF: {len(images)} pages")
             return images
     except Exception as e:
-        logging.warning(f"Pillow failed: {e}")
+        logging.warning(f"Pillow PDF: {e}")
     return []
 
-def compress_image(data, max_px=800, quality=70):
+def compress(data, max_px=1000, quality=75):
+    """Compress image to reduce size."""
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(data))
@@ -53,67 +58,79 @@ def compress_image(data, max_px=800, quality=70):
             img = img.resize((int(img.width*r), int(img.height*r)), Image.LANCZOS)
         buf = io.BytesIO()
         img.convert("RGB").save(buf, "JPEG", quality=quality)
-        compressed = buf.getvalue()
-        logging.info(f"Compressed: {len(data)} -> {len(compressed)} bytes")
-        return compressed
+        return buf.getvalue()
     except:
         return data
 
 def to_images(data, fn):
+    """Convert any file to list of compressed JPEG bytes."""
     ext = Path(fn).suffix.lower()
     if ext == ".pdf":
         imgs = pdf_to_images(data)
-        return [compress_image(img) for img in imgs] if imgs else []
-    mime_ok = {".jpg", ".jpeg", ".png", ".webp"}
-    if ext not in mime_ok: return []
-    return [compress_image(data)]
+        return [compress(img) for img in imgs] if imgs else []
+    if ext in {".jpg",".jpeg",".png",".webp",".heic",".bmp"}:
+        return [compress(data)]
+    return []
 
-def call_groq(key, prompt, images):
-    """Call Groq with compressed images — max 2 images to avoid payload limits."""
-    # Use only first 2 images to avoid rate limits
-    use_images = images[:2]
-    
-    content = [{"type":"text","text":prompt}]
-    for img_data in use_images:
+def call_claude(api_key, prompt, images):
+    """Call Claude API (Anthropic) - handles all image types perfectly."""
+    content = []
+    for img_data in images[:5]:  # Claude supports up to 5 images
         b64 = base64.standard_b64encode(img_data).decode()
         content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}
         })
+    content.append({"type": "text", "text": prompt})
 
-    for model in [
-        "meta-llama/llama-4-scout-17b-16e-instruct",
-        "meta-llama/llama-4-maverick-17b-128e-instruct"
-    ]:
+    headers = {
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
+    payload = {
+        "model": "claude-sonnet-4-6",
+        "max_tokens": 2048,
+        "messages": [{"role": "user", "content": content}]
+    }
+    try:
+        r = requests.post("https://api.anthropic.com/v1/messages",
+                         json=payload, headers=headers, timeout=120)
+        logging.info(f"Claude API: {r.status_code}")
+        if r.status_code == 200:
+            text = r.json()["content"][0]["text"]
+            logging.info(f"Claude response: {text[:200]}")
+            return text
+        logging.error(f"Claude error: {r.text[:300]}")
+        return f"ERROR_CLAUDE_{r.status_code}:{r.text[:200]}"
+    except Exception as e:
+        logging.error(f"Claude exception: {e}")
+        return f"ERROR:{e}"
+
+def call_groq(api_key, prompt, images):
+    """Call Groq vision API as fallback."""
+    content = [{"type":"text","text":prompt}]
+    for img_data in images[:2]:
+        b64 = base64.standard_b64encode(img_data).decode()
+        content.append({"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{b64}"}})
+
+    for model in ["meta-llama/llama-4-scout-17b-16e-instruct",
+                  "meta-llama/llama-4-maverick-17b-128e-instruct"]:
         try:
-            h = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-            p = {
-                "model": model,
-                "messages": [{"role": "user", "content": content}],
-                "temperature": 0.1,
-                "max_tokens": 2048
-            }
-            logging.info(f"Calling Groq {model} with {len(use_images)} images...")
-            r = requests.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                json=p, headers=h, timeout=120
-            )
-            logging.info(f"Groq {model}: HTTP {r.status_code}")
+            h = {"Authorization":f"Bearer {api_key}","Content-Type":"application/json"}
+            p = {"model":model,"messages":[{"role":"user","content":content}],
+                 "temperature":0.1,"max_tokens":2048}
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                            json=p, headers=h, timeout=120)
+            logging.info(f"Groq {model}: {r.status_code}")
             if r.status_code == 200:
-                text = r.json()["choices"][0]["message"]["content"]
-                logging.info(f"Success! Response: {text[:200]}")
-                return text
-            elif r.status_code == 429:
-                logging.warning("Rate limited, waiting 30s...")
+                return r.json()["choices"][0]["message"]["content"]
+            if r.status_code == 429:
                 time.sleep(30)
-                continue
-            else:
-                logging.error(f"Error {r.status_code}: {r.text[:300]}")
         except Exception as e:
-            logging.error(f"Exception calling Groq: {e}")
-        time.sleep(5)
-
-    return "ERROR:All Groq models failed"
+            logging.error(f"Groq error: {e}")
+        time.sleep(3)
+    return "ERROR:Groq failed"
 
 def parse_json(text):
     if not text: return None
@@ -130,49 +147,35 @@ def empty(r):
     return {
         "fields": {k:"" for k in EXPECTED_KEYS},
         "field_confidence": {k:"low" for k in EXPECTED_KEYS},
-        "validation": {"_e": {"error": True, "message": r}},
+        "validation": {"_e":{"error":True,"message":r}},
         "confidence_summary": {"total_extracted":0,"high":0,"medium":0,"low":0,"review_needed":1},
         "documents_detected": [],
         "error": r
     }
 
-class DocumentExtractor:
-    def __init__(self, api_key):
-        self.api_key = api_key.strip()
+PROMPT = """You are an expert at reading Indian government documents (Aadhaar card, PAN card, bank cheques/passbooks).
 
-    def process_employee_documents(self, files, hint_name="", date_of_joining=""):
-        all_images = []
-        for fn, fd in files:
-            imgs = to_images(fd, fn)
-            logging.info(f"{fn}: {len(imgs)} image(s), sizes: {[len(i) for i in imgs]}")
-            all_images.extend(imgs)
+Extract ALL visible information from the document image(s) provided.
+Employee name hint: {hint}
+Date of joining: {doj}
 
-        if not all_images:
-            return empty("No readable images found. Upload JPG or PNG files.")
-
-        logging.info(f"Total images: {len(all_images)}, total size: {sum(len(i) for i in all_images)} bytes")
-
-        prompt = f"""Extract employee data from these Indian HR documents (Aadhaar card, PAN card, bank cheque/passbook).
-Employee name hint: {hint_name}
-Date of joining: {date_of_joining}
-
-Return ONLY this JSON object (no text before or after):
+Return ONLY this JSON (no explanation, no markdown):
 {{
   "employee_name": "name exactly as on Aadhaar card",
-  "father_husband_name": "father name from Aadhaar",
+  "father_husband_name": "father or husband name from Aadhaar",
   "gender": "Male or Female",
   "marital_status": "Married or Unmarried",
-  "date_of_birth": "DD/MM/YYYY",
-  "date_of_joining": "{date_of_joining}",
-  "aadhaar_number": "12 digit aadhaar",
-  "mobile_number": "10 digit mobile if visible",
+  "date_of_birth": "DD/MM/YYYY from Aadhaar",
+  "date_of_joining": "{doj}",
+  "aadhaar_number": "12 digit Aadhaar number",
+  "mobile_number": "10 digit mobile number if visible",
   "pan_number": "PAN number like ABCDE1234F",
-  "present_address": "full address from Aadhaar back",
-  "permanent_address": "same as present if not separately mentioned",
-  "bank_name": "bank name from cheque",
+  "present_address": "complete address from Aadhaar back side",
+  "permanent_address": "same as present if not specified separately",
+  "bank_name": "bank name from cheque or passbook",
   "bank_account_number": "account number from cheque",
   "ifsc_code": "IFSC code from cheque",
-  "branch_name": "branch name",
+  "branch_name": "branch name from cheque",
   "uan_number": "",
   "esic_number": "",
   "pf_basic_wages": "",
@@ -186,16 +189,52 @@ Return ONLY this JSON object (no text before or after):
   "insurance_details": ""
 }}"""
 
-        raw = call_groq(self.api_key, prompt, all_images)
+class DocumentExtractor:
+    def __init__(self, api_key):
+        self.api_key = api_key.strip()
+        # Detect key type
+        if api_key.startswith("sk-ant-"):
+            self.key_type = "claude"
+        elif api_key.startswith("gsk_"):
+            self.key_type = "groq"
+        else:
+            self.key_type = "unknown"
+        logging.info(f"API key type: {self.key_type}")
+
+    def process_employee_documents(self, files, hint_name="", date_of_joining=""):
+        # Convert all files to images
+        all_images = []
+        for fn, fd in files:
+            imgs = to_images(fd, fn)
+            logging.info(f"{fn}: {len(imgs)} image(s)")
+            all_images.extend(imgs)
+
+        if not all_images:
+            return empty("No readable images. Upload JPG, PNG or PDF files.")
+
+        prompt = PROMPT.format(hint=hint_name or "not provided", doj=date_of_joining or "")
+
+        # Try Claude first, then Groq as fallback
+        if self.key_type == "claude":
+            raw = call_claude(self.api_key, prompt, all_images)
+            if raw.startswith("ERROR") and "groq" in raw.lower():
+                raw = call_groq(self.api_key, prompt, all_images)
+        elif self.key_type == "groq":
+            raw = call_groq(self.api_key, prompt, all_images)
+        else:
+            # Try Claude format first
+            raw = call_claude(self.api_key, prompt, all_images)
+            if raw.startswith("ERROR"):
+                raw = call_groq(self.api_key, prompt, all_images)
 
         if not raw or raw.startswith("ERROR"):
-            result = empty(f"API error: {raw[:200] if raw else 'No response'}")
+            result = empty(f"API error: {raw[:300] if raw else 'No response'}")
             result["raw_response"] = raw or ""
             return result
 
         fields = parse_json(raw)
         if not fields:
-            result = empty("Could not parse AI response")
+            result = empty("Could not parse response")
             result["raw_response"] = raw[:500]
             return result
 
@@ -218,12 +257,8 @@ Return ONLY this JSON object (no text before or after):
         if not docs: docs = ["Documents processed"]
 
         return {
-            "fields": fields,
-            "field_confidence": fc,
-            "validation": val,
-            "confidence_summary": {
-                "total_extracted": ex, "high": ex, "medium": 0,
-                "low": len(EXPECTED_KEYS)-ex, "review_needed": len(val)
-            },
+            "fields": fields, "field_confidence": fc, "validation": val,
+            "confidence_summary": {"total_extracted":ex,"high":ex,"medium":0,
+            "low":len(EXPECTED_KEYS)-ex,"review_needed":len(val)},
             "documents_detected": docs
         }
