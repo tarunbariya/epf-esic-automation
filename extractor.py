@@ -41,7 +41,7 @@ def pdf_to_image(data):
         images = []
         for i, page in enumerate(doc):
             if i >= 2: break
-            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))  # Higher res for scanned docs
             images.append(pix.tobytes("jpeg"))
         doc.close()
         return images
@@ -49,7 +49,7 @@ def pdf_to_image(data):
         logger.warning(f"PDF->image: {e}")
     return []
 
-def compress_image(data, max_px=1000, quality=80):
+def compress_image(data, max_px=1400, quality=88):
     try:
         from PIL import Image, ImageOps
         img = Image.open(io.BytesIO(data))
@@ -277,8 +277,12 @@ class DocumentExtractor:
         hint = hint_name or "not specified"
         doj = date_of_joining or ""
 
-        # ── Collect all files ──────────────────────────────────────────
-        for fn, fd in files:
+        # ── Collect all files (JPG first for better vision) ─────────────
+        # Sort: images first, then PDFs
+        sorted_files = sorted(files, key=lambda x: (
+            0 if Path(x[0]).suffix.lower() in {'.jpg','.jpeg','.png'} else 1
+        ))
+        for fn, fd in sorted_files:
             ext = Path(fn).suffix.lower()
             logger.info(f"Processing {fn} ({len(fd)} bytes)")
 
