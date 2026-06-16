@@ -169,33 +169,47 @@ Return ONLY this JSON (no explanation, no markdown):
 
 def call_groq_vision_all(key, images, hint, doj):
     """Send up to 4 images in ONE call for speed."""
-    prompt = f"""You are an expert reading Indian HR documents (Aadhaar card front+back, PAN card, bank cheque/passbook).
-I am sending you {len(images)} document image(s) for ONE employee.
-Employee name hint: {hint}
+    prompt = f"""You are an expert OCR system for Indian government documents.
+I am sending {len(images)} document image(s) for employee: {hint}
 Date of joining: {doj}
 
-READ ALL IMAGES CAREFULLY and extract every piece of information visible.
-Aadhaar has: name, S/O (father name), DOB, gender, address, 12-digit number
-PAN has: name, PAN number (format: ABCDE1234F)  
-Cheque has: bank name, account number, IFSC code, branch
+CAREFULLY read EVERY image and extract ALL visible text.
 
-Return ONLY this JSON (no explanation):
+AADHAAR CARD contains:
+- Front: Full name (large text), S/O or W/O or D/O (father/husband name), Date of Birth (DD/MM/YYYY), Gender (Male/Female), 12-digit Aadhaar number at bottom
+- Back: Full address with PIN code, sometimes mobile number
+
+PAN CARD contains:
+- Name, Father's name, Date of Birth, PAN number (format: 5 letters + 4 digits + 1 letter, e.g. HHMPP0103B)
+
+BANK CHEQUE/PASSBOOK contains:
+- Account holder name, Bank name, Branch name, Account number (long number), IFSC code (format: 4 letters + 0 + 6 chars, e.g. HDFC0001703)
+
+IMPORTANT RULES:
+- Extract name EXACTLY as printed, do not guess or modify
+- Aadhaar number is 12 digits, often shown as XXXX XXXX XXXX
+- PAN is always 10 characters: ABCDE1234F format
+- IFSC is always 11 characters starting with 4 bank letters
+- If you cannot read something clearly, leave it empty - do NOT guess garbled text
+- For address, write the complete readable address only
+
+Return ONLY this JSON (empty string for anything unclear or missing):
 {{
-  "employee_name": "exact name from Aadhaar",
-  "father_husband_name": "father name (S/O field on Aadhaar)",
-  "gender": "Male or Female",
-  "marital_status": "Unmarried (if young/single) or Married",
+  "employee_name": "name exactly as on Aadhaar front",
+  "father_husband_name": "name after S/O or W/O on Aadhaar",
+  "gender": "Male or Female from Aadhaar",
+  "marital_status": "Unmarried or Married",
   "date_of_birth": "DD/MM/YYYY from Aadhaar",
   "date_of_joining": "{doj}",
-  "aadhaar_number": "12 digit Aadhaar number with spaces",
-  "mobile_number": "10 digit mobile if visible",
-  "pan_number": "PAN number like HHMPP0103B",
-  "present_address": "complete address from Aadhaar back",
-  "permanent_address": "same as present if not specified",
-  "bank_name": "full bank name from cheque",
-  "bank_account_number": "complete account number",
-  "ifsc_code": "IFSC like HDFC0001703",
-  "branch_name": "branch name and location",
+  "aadhaar_number": "12 digits from Aadhaar e.g. 7626 8151 1496",
+  "mobile_number": "10 digit mobile number if clearly visible",
+  "pan_number": "PAN from PAN card e.g. HHMPP0103B",
+  "present_address": "complete clear address from Aadhaar back",
+  "permanent_address": "same as present address if not separately shown",
+  "bank_name": "bank name e.g. HDFC Bank",
+  "bank_account_number": "account number from cheque",
+  "ifsc_code": "IFSC code e.g. HDFC0001703",
+  "branch_name": "branch location",
   "uan_number": "",
   "esic_number": "",
   "pf_basic_wages": "",
