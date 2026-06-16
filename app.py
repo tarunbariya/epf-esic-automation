@@ -242,7 +242,7 @@ anyname.zip
             result["joining_date_override"] = doj_val
             new_emps.append(result)
             logging.info(f"Extracted: {grp} | {result['confidence_summary'].get('total_extracted',0)} fields")
-            if idx < total-1: time.sleep(1)
+            if idx < total-1: time.sleep(10)
 
         prog.progress(1.0)
         st.session_state.extracted_employees.extend(new_emps)
