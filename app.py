@@ -90,10 +90,10 @@ with st.sidebar:
     if secrets_loaded:
         st.success("✅ Settings loaded from cloud secrets")
 
-    st.markdown("### 🔑 Groq API Key")
-    st.markdown("[Get free key →](https://console.groq.com)")
+    st.markdown("### 🔑 API Key (Groq or Claude)")
+    st.markdown("Groq: [console.groq.com](https://console.groq.com) | Claude: [console.anthropic.com](https://console.anthropic.com)")
     groq_key = st.text_input("Groq API key (gsk_...)", type="password",
-                              value=cfg.get("groq_key",""), placeholder="gsk_...",
+                              value=cfg.get("groq_key",""), placeholder="gsk_... or sk-ant-...",
                               key="groq_input")
     if groq_key != cfg.get("groq_key",""):
         cfg["groq_key"] = groq_key
