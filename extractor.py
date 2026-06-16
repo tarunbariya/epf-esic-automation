@@ -1,196 +1,179 @@
-"""
-Document Extractor — uses Gemini 1.5 Flash (free tier)
-"""
-
-import json
-import base64
-import re
-import time
-import logging
-import requests
+import json, base64, re, time, logging, requests, io
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-
 EXPECTED_KEYS = [
-    "employee_name", "father_husband_name", "gender", "marital_status",
-    "date_of_birth", "date_of_joining", "aadhaar_number", "mobile_number",
-    "pan_number", "present_address", "permanent_address", "bank_name",
-    "bank_account_number", "ifsc_code", "branch_name", "uan_number",
-    "esic_number", "pf_basic_wages", "gross_salary", "pf_eligibility",
-    "nominee_name", "nominee_relationship", "nominee_dob", "family_members",
-    "esic_dispensary", "insurance_details"
+    "employee_name","father_husband_name","gender","marital_status",
+    "date_of_birth","date_of_joining","aadhaar_number","mobile_number",
+    "pan_number","present_address","permanent_address","bank_name",
+    "bank_account_number","ifsc_code","branch_name","uan_number",
+    "esic_number","pf_basic_wages","gross_salary","pf_eligibility",
+    "nominee_name","nominee_relationship","nominee_dob","family_members",
+    "esic_dispensary","insurance_details"
 ]
 
-def call_gemini(api_key, prompt, images):
-    parts = [{"text": prompt}]
-    for img in images:
-        parts.append({"inline_data": img})
-    payload = {
-        "contents": [{"parts": parts}],
-        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 4096}
-    }
-    for attempt in range(3):
+def pdf_to_images(data):
+    try:
+        import fitz
+        doc = fitz.open(stream=data, filetype="pdf")
+        images = []
+        for page in doc:
+            pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
+            images.append(("image/jpeg", pix.tobytes("jpeg")))
+        doc.close()
+        logging.info(f"PDF converted: {len(images)} pages")
+        return images
+    except Exception as e:
+        logging.warning(f"PyMuPDF failed: {e}")
+        return []
+
+def compress(data):
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(data))
+        if max(img.size) > 1200:
+            r = 1200/max(img.size)
+            img = img.resize((int(img.width*r), int(img.height*r)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "JPEG", quality=85)
+        return buf.getvalue()
+    except:
+        return data
+
+def to_images(data, fn):
+    ext = Path(fn).suffix.lower()
+    if ext == ".pdf":
+        imgs = pdf_to_images(data)
+        if imgs: return imgs
+        return []
+    mime = {".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png"}.get(ext)
+    if not mime: return []
+    return [(mime, compress(data))]
+
+def call_groq(key, prompt, images):
+    """Call Groq API with vision."""
+    content = [{"type":"text","text":prompt}]
+    for mime, data in images[:4]:
+        b64 = base64.standard_b64encode(data).decode()
+        content.append({"type":"image_url","image_url":{"url":f"data:{mime};base64,{b64}"}})
+
+    for model in ["meta-llama/llama-4-scout-17b-16e-instruct",
+                  "meta-llama/llama-4-maverick-17b-128e-instruct"]:
         try:
-            resp = requests.post(f"{GEMINI_URL}?key={api_key}", json=payload, timeout=60)
-            if resp.status_code == 429:
-                time.sleep(30 * (attempt + 1))
-                continue
-            resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            h = {"Authorization":f"Bearer {key}","Content-Type":"application/json"}
+            p = {"model":model,"messages":[{"role":"user","content":content}],
+                 "temperature":0.1,"max_tokens":4096}
+            r = requests.post("https://api.groq.com/openai/v1/chat/completions",
+                            json=p, headers=h, timeout=120)
+            logging.info(f"Groq {model}: {r.status_code}")
+            if r.status_code == 200:
+                text = r.json()["choices"][0]["message"]["content"]
+                logging.info(f"Response: {text[:200]}")
+                return text
+            logging.error(f"Groq error: {r.text[:200]}")
         except Exception as e:
-            if attempt == 2:
-                raise
-            time.sleep(5)
-    return ""
+            logging.error(f"Exception: {e}")
+    return "ERROR:All Groq models failed"
 
-def encode_file(file_bytes, filename):
-    ext = Path(filename).suffix.lower()
-    mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".pdf": "application/pdf"}
-    mime = mime_map.get(ext)
-    if not mime:
-        return None
-    return {"mime_type": mime, "data": base64.standard_b64encode(file_bytes).decode("utf-8")}
-
-def parse_json_response(text):
-    if not text:
-        return None
-    text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        try:
-            return json.loads(match.group())
-        except:
-            pass
+def parse_json(text):
+    if not text: return None
+    text = re.sub(r"```(?:json)?","",text).replace("```","").strip()
+    try: return json.loads(text)
+    except: pass
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        try: return json.loads(m.group())
+        except: pass
     return None
 
-def validate_fields(fields):
-    validation = {}
-    aadhaar = fields.get("aadhaar_number", "").replace(" ", "")
-    if aadhaar and not re.fullmatch(r"\d{12}", aadhaar):
-        validation["aadhaar_number"] = {"error": True, "message": f"Invalid Aadhaar: expected 12 digits"}
-    pan = fields.get("pan_number", "").strip().upper()
-    if pan and not re.fullmatch(r"[A-Z]{5}[0-9]{4}[A-Z]", pan):
-        validation["pan_number"] = {"error": True, "message": f"Invalid PAN format"}
-    ifsc = fields.get("ifsc_code", "").strip().upper()
-    if ifsc and not re.fullmatch(r"[A-Z]{4}0[A-Z0-9]{6}", ifsc):
-        validation["ifsc_code"] = {"error": True, "message": f"Invalid IFSC format"}
-    mobile = fields.get("mobile_number", "").replace(" ", "").replace("-", "")
-    if mobile and not re.fullmatch(r"[6-9]\d{9}", mobile):
-        validation["mobile_number"] = {"error": True, "message": f"Invalid mobile number"}
-    for field in ["employee_name", "aadhaar_number"]:
-        if not fields.get(field):
-            validation[field] = {"error": True, "message": "Required field missing"}
-    return validation
-
-def empty_result(reason):
-    return {
-        "fields": {k: "" for k in EXPECTED_KEYS},
-        "field_confidence": {},
-        "validation": {"_error": {"error": True, "message": reason}},
-        "confidence_summary": {"total_extracted": 0, "high": 0, "medium": 0, "low": 0, "review_needed": 1},
-        "documents_detected": [],
-        "error": reason
-    }
+def empty(r):
+    return {"fields":{k:"" for k in EXPECTED_KEYS},
+            "field_confidence":{k:"low" for k in EXPECTED_KEYS},
+            "validation":{"_e":{"error":True,"message":r}},
+            "confidence_summary":{"total_extracted":0,"high":0,"medium":0,"low":0,"review_needed":1},
+            "documents_detected":[],"error":r}
 
 class DocumentExtractor:
-    def __init__(self, api_key):
-        self.api_key = api_key
+    def __init__(self, api_key): self.api_key = api_key.strip()
 
     def process_employee_documents(self, files, hint_name="", date_of_joining=""):
         images = []
-        for fname, fdata in files:
-            encoded = encode_file(fdata, fname)
-            if encoded:
-                images.append(encoded)
+        for fn, fd in files:
+            imgs = to_images(fd, fn)
+            logging.info(f"{fn}: {len(imgs)} image(s)")
+            images.extend(imgs)
 
         if not images:
-            return empty_result("No supported documents found")
+            return empty("No readable images found.")
 
-        prompt = f"""You are an expert at extracting data from Indian government documents for EPF/ESIC employee registration.
+        logging.info(f"Sending {len(images)} images to Groq AI")
 
-Extract ALL available information from the provided documents and return ONLY a valid JSON object with exactly these fields.
-Use empty string "" for any field not found.
+        prompt = f"""Extract employee data from these Indian HR documents (Aadhaar, PAN, bank cheque).
+Employee: {hint_name}  Date of joining: {date_of_joining}
 
+Return ONLY this JSON (no explanation):
 {{
-  "employee_name": "",
-  "father_husband_name": "",
-  "gender": "",
-  "marital_status": "",
-  "date_of_birth": "",
-  "date_of_joining": "",
-  "aadhaar_number": "",
-  "mobile_number": "",
-  "pan_number": "",
-  "present_address": "",
-  "permanent_address": "",
-  "bank_name": "",
-  "bank_account_number": "",
-  "ifsc_code": "",
-  "branch_name": "",
+  "employee_name": "name exactly as on Aadhaar",
+  "father_husband_name": "father or husband name",
+  "gender": "Male or Female",
+  "marital_status": "Married or Unmarried",
+  "date_of_birth": "DD/MM/YYYY",
+  "date_of_joining": "{date_of_joining}",
+  "aadhaar_number": "12 digit aadhaar",
+  "mobile_number": "10 digit mobile",
+  "pan_number": "PAN like ABCDE1234F",
+  "present_address": "full address from Aadhaar",
+  "permanent_address": "same as present if not specified",
+  "bank_name": "bank name",
+  "bank_account_number": "account number",
+  "ifsc_code": "IFSC code",
+  "branch_name": "branch name",
   "uan_number": "",
   "esic_number": "",
   "pf_basic_wages": "",
   "gross_salary": "",
-  "pf_eligibility": "",
+  "pf_eligibility": "ESIC",
   "nominee_name": "",
   "nominee_relationship": "",
   "nominee_dob": "",
   "family_members": "",
   "esic_dispensary": "",
   "insurance_details": ""
-}}
+}}"""
 
-Rules:
-- Employee name exactly as on Aadhaar
-- Aadhaar: 12 digits like XXXX XXXX XXXX
-- PAN: like ABCDE1234F (uppercase)
-- IFSC: like SBIN0001234 (uppercase)
-- Dates: DD/MM/YYYY format
-- Gender: Male / Female / Other
-- Marital Status: Married / Unmarried
-- Employee name hint: {hint_name or 'not provided'}
-- Date of joining: {date_of_joining or 'not provided'}
+        raw = call_groq(self.api_key, prompt, images)
 
-Return ONLY the JSON. No explanation. No markdown."""
+        if not raw or raw.startswith("ERROR"):
+            result = empty(f"API error: {raw[:200] if raw else 'No response'}")
+            result["raw_response"] = raw or ""
+            return result
 
-        try:
-            raw = call_gemini(self.api_key, prompt, images[:10])
-        except Exception as e:
-            return empty_result(f"API error: {e}")
-
-        fields = parse_json_response(raw)
+        fields = parse_json(raw)
         if not fields:
-            return empty_result("Could not parse AI response")
+            result = empty("Could not parse response")
+            result["raw_response"] = raw[:500]
+            return result
 
-        # Ensure ALL expected keys exist
-        for key in EXPECTED_KEYS:
-            if key not in fields:
-                fields[key] = ""
+        for k in EXPECTED_KEYS:
+            if k not in fields or fields[k] is None: fields[k] = ""
+            else: fields[k] = str(fields[k]).strip()
 
-        # Set date of joining if provided but not extracted
         if date_of_joining and not fields.get("date_of_joining"):
             fields["date_of_joining"] = date_of_joining
 
-        # Simple confidence: any non-empty field = high
-        field_confidence = {k: "high" if v else "low" for k, v in fields.items()}
-        validation = validate_fields(fields)
+        fc = {k:("high" if fields[k] else "low") for k in EXPECTED_KEYS}
+        val = {}
+        if not fields.get("employee_name"):
+            val["employee_name"] = {"error":True,"message":"Name not found"}
+        ex = sum(1 for v in fields.values() if v)
+        docs = []
+        if fields.get("aadhaar_number"): docs.append("Aadhaar Card")
+        if fields.get("pan_number"): docs.append("PAN Card")
+        if fields.get("bank_account_number"): docs.append("Bank Document")
+        if not docs: docs = ["Documents processed"]
 
-        extracted_count = sum(1 for v in fields.values() if v)
-        confidence_summary = {
-            "total_extracted": extracted_count,
-            "high": extracted_count,
-            "medium": 0,
-            "low": len(EXPECTED_KEYS) - extracted_count,
-            "review_needed": sum(1 for v in validation.values() if v.get("error"))
-        }
-
-        return {
-            "fields": fields,
-            "field_confidence": field_confidence,
-            "validation": validation,
-            "confidence_summary": confidence_summary,
-            "documents_detected": ["Documents processed successfully"],
-        }
+        return {"fields":fields,"field_confidence":fc,"validation":val,
+                "confidence_summary":{"total_extracted":ex,"high":ex,"medium":0,
+                "low":len(EXPECTED_KEYS)-ex,"review_needed":len(val)},
+                "documents_detected":docs}
