@@ -14,26 +14,48 @@ EXPECTED_KEYS = [
 ]
 
 def pdf_to_images(data):
+    """Convert PDF to images - tries PyMuPDF first, then Pillow."""
+    # Method 1: PyMuPDF (best quality)
     try:
         import fitz
         doc = fitz.open(stream=data, filetype="pdf")
         images = []
         for page in doc:
-            pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
             images.append(("image/jpeg", pix.tobytes("jpeg")))
         doc.close()
-        logging.info(f"PDF converted: {len(images)} pages")
-        return images
+        if images:
+            logging.info(f"PDF->images via PyMuPDF: {len(images)} pages")
+            return images
     except Exception as e:
         logging.warning(f"PyMuPDF failed: {e}")
-        return []
 
-def compress(data):
+    # Method 2: Pillow
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(data))
+        images = []
+        for i in range(getattr(img, "n_frames", 1)):
+            try: img.seek(i)
+            except EOFError: break
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, "JPEG", quality=85)
+            images.append(("image/jpeg", buf.getvalue()))
+        if images:
+            logging.info(f"PDF->images via Pillow: {len(images)} pages")
+            return images
+    except Exception as e:
+        logging.warning(f"Pillow PDF failed: {e}")
+
+    logging.warning("PDF conversion failed - skipping")
+    return []
+
+def compress_image(data):
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(data))
         if max(img.size) > 1200:
-            r = 1200/max(img.size)
+            r = 1200 / max(img.size)
             img = img.resize((int(img.width*r), int(img.height*r)), Image.LANCZOS)
         buf = io.BytesIO()
         img.convert("RGB").save(buf, "JPEG", quality=85)
@@ -44,15 +66,13 @@ def compress(data):
 def to_images(data, fn):
     ext = Path(fn).suffix.lower()
     if ext == ".pdf":
-        imgs = pdf_to_images(data)
-        if imgs: return imgs
-        return []
-    mime = {".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png"}.get(ext)
+        return pdf_to_images(data)
+    mime = {".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp"}.get(ext)
     if not mime: return []
-    return [(mime, compress(data))]
+    return [(mime, compress_image(data))]
 
 def call_groq(key, prompt, images):
-    """Call Groq API with vision."""
+    """Call Groq vision API."""
     content = [{"type":"text","text":prompt}]
     for mime, data in images[:4]:
         b64 = base64.standard_b64encode(data).decode()
@@ -62,18 +82,21 @@ def call_groq(key, prompt, images):
                   "meta-llama/llama-4-maverick-17b-128e-instruct"]:
         try:
             h = {"Authorization":f"Bearer {key}","Content-Type":"application/json"}
-            p = {"model":model,"messages":[{"role":"user","content":content}],
+            p = {"model":model,
+                 "messages":[{"role":"user","content":content}],
                  "temperature":0.1,"max_tokens":4096}
             r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                            json=p, headers=h, timeout=120)
+                              json=p, headers=h, timeout=120)
             logging.info(f"Groq {model}: {r.status_code}")
             if r.status_code == 200:
                 text = r.json()["choices"][0]["message"]["content"]
-                logging.info(f"Response: {text[:200]}")
+                logging.info(f"Groq response: {text[:200]}")
                 return text
-            logging.error(f"Groq error: {r.text[:200]}")
+            logging.error(f"Groq {model} error {r.status_code}: {r.text[:300]}")
         except Exception as e:
-            logging.error(f"Exception: {e}")
+            logging.error(f"Groq exception: {e}")
+        time.sleep(2)
+
     return "ERROR:All Groq models failed"
 
 def parse_json(text):
@@ -95,24 +118,27 @@ def empty(r):
             "documents_detected":[],"error":r}
 
 class DocumentExtractor:
-    def __init__(self, api_key): self.api_key = api_key.strip()
+    def __init__(self, api_key):
+        self.api_key = api_key.strip()
 
     def process_employee_documents(self, files, hint_name="", date_of_joining=""):
         images = []
         for fn, fd in files:
             imgs = to_images(fd, fn)
-            logging.info(f"{fn}: {len(imgs)} image(s)")
+            logging.info(f"{fn}: {len(imgs)} image(s) extracted")
             images.extend(imgs)
 
         if not images:
-            return empty("No readable images found.")
+            return empty("No readable images. Please upload JPG or PNG files.")
 
-        logging.info(f"Sending {len(images)} images to Groq AI")
+        logging.info(f"Sending {len(images)} total images to Groq")
 
-        prompt = f"""Extract employee data from these Indian HR documents (Aadhaar, PAN, bank cheque).
-Employee: {hint_name}  Date of joining: {date_of_joining}
+        prompt = f"""You are extracting employee data from Indian HR documents.
+Look carefully at ALL {len(images)} document image(s).
+Employee name hint: {hint_name}
+Date of joining: {date_of_joining}
 
-Return ONLY this JSON (no explanation):
+Return ONLY this JSON (no explanation, no markdown):
 {{
   "employee_name": "name exactly as on Aadhaar",
   "father_husband_name": "father or husband name",
@@ -120,12 +146,12 @@ Return ONLY this JSON (no explanation):
   "marital_status": "Married or Unmarried",
   "date_of_birth": "DD/MM/YYYY",
   "date_of_joining": "{date_of_joining}",
-  "aadhaar_number": "12 digit aadhaar",
+  "aadhaar_number": "12 digit aadhaar number",
   "mobile_number": "10 digit mobile",
   "pan_number": "PAN like ABCDE1234F",
   "present_address": "full address from Aadhaar",
   "permanent_address": "same as present if not specified",
-  "bank_name": "bank name",
+  "bank_name": "bank name from cheque",
   "bank_account_number": "account number",
   "ifsc_code": "IFSC code",
   "branch_name": "branch name",
@@ -151,7 +177,7 @@ Return ONLY this JSON (no explanation):
 
         fields = parse_json(raw)
         if not fields:
-            result = empty("Could not parse response")
+            result = empty("Could not parse AI response")
             result["raw_response"] = raw[:500]
             return result
 
