@@ -14,23 +14,19 @@ EXPECTED_KEYS = [
 ]
 
 def pdf_to_images(data):
-    """Convert PDF to images - tries PyMuPDF first, then Pillow."""
-    # Method 1: PyMuPDF (best quality)
     try:
         import fitz
         doc = fitz.open(stream=data, filetype="pdf")
         images = []
         for page in doc:
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            images.append(("image/jpeg", pix.tobytes("jpeg")))
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
+            images.append(pix.tobytes("jpeg"))
         doc.close()
-        if images:
-            logging.info(f"PDF->images via PyMuPDF: {len(images)} pages")
-            return images
+        logging.info(f"PyMuPDF: {len(images)} pages")
+        return images
     except Exception as e:
         logging.warning(f"PyMuPDF failed: {e}")
 
-    # Method 2: Pillow
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(data))
@@ -39,63 +35,83 @@ def pdf_to_images(data):
             try: img.seek(i)
             except EOFError: break
             buf = io.BytesIO()
-            img.convert("RGB").save(buf, "JPEG", quality=85)
-            images.append(("image/jpeg", buf.getvalue()))
+            img.convert("RGB").save(buf, "JPEG", quality=70)
+            images.append(buf.getvalue())
         if images:
-            logging.info(f"PDF->images via Pillow: {len(images)} pages")
+            logging.info(f"Pillow: {len(images)} pages")
             return images
     except Exception as e:
-        logging.warning(f"Pillow PDF failed: {e}")
-
-    logging.warning("PDF conversion failed - skipping")
+        logging.warning(f"Pillow failed: {e}")
     return []
 
-def compress_image(data):
+def compress_image(data, max_px=800, quality=70):
     try:
         from PIL import Image
         img = Image.open(io.BytesIO(data))
-        if max(img.size) > 1200:
-            r = 1200 / max(img.size)
+        if max(img.size) > max_px:
+            r = max_px / max(img.size)
             img = img.resize((int(img.width*r), int(img.height*r)), Image.LANCZOS)
         buf = io.BytesIO()
-        img.convert("RGB").save(buf, "JPEG", quality=85)
-        return buf.getvalue()
+        img.convert("RGB").save(buf, "JPEG", quality=quality)
+        compressed = buf.getvalue()
+        logging.info(f"Compressed: {len(data)} -> {len(compressed)} bytes")
+        return compressed
     except:
         return data
 
 def to_images(data, fn):
     ext = Path(fn).suffix.lower()
     if ext == ".pdf":
-        return pdf_to_images(data)
-    mime = {".jpg":"image/jpeg",".jpeg":"image/jpeg",".png":"image/png",".webp":"image/webp"}.get(ext)
-    if not mime: return []
-    return [(mime, compress_image(data))]
+        imgs = pdf_to_images(data)
+        return [compress_image(img) for img in imgs] if imgs else []
+    mime_ok = {".jpg", ".jpeg", ".png", ".webp"}
+    if ext not in mime_ok: return []
+    return [compress_image(data)]
 
 def call_groq(key, prompt, images):
-    """Call Groq vision API."""
+    """Call Groq with compressed images — max 2 images to avoid payload limits."""
+    # Use only first 2 images to avoid rate limits
+    use_images = images[:2]
+    
     content = [{"type":"text","text":prompt}]
-    for mime, data in images[:4]:
-        b64 = base64.standard_b64encode(data).decode()
-        content.append({"type":"image_url","image_url":{"url":f"data:{mime};base64,{b64}"}})
+    for img_data in use_images:
+        b64 = base64.standard_b64encode(img_data).decode()
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{b64}"}
+        })
 
-    for model in ["meta-llama/llama-4-scout-17b-16e-instruct",
-                  "meta-llama/llama-4-maverick-17b-128e-instruct"]:
+    for model in [
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "meta-llama/llama-4-maverick-17b-128e-instruct"
+    ]:
         try:
-            h = {"Authorization":f"Bearer {key}","Content-Type":"application/json"}
-            p = {"model":model,
-                 "messages":[{"role":"user","content":content}],
-                 "temperature":0.1,"max_tokens":4096}
-            r = requests.post("https://api.groq.com/openai/v1/chat/completions",
-                              json=p, headers=h, timeout=120)
-            logging.info(f"Groq {model}: {r.status_code}")
+            h = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            p = {
+                "model": model,
+                "messages": [{"role": "user", "content": content}],
+                "temperature": 0.1,
+                "max_tokens": 2048
+            }
+            logging.info(f"Calling Groq {model} with {len(use_images)} images...")
+            r = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                json=p, headers=h, timeout=120
+            )
+            logging.info(f"Groq {model}: HTTP {r.status_code}")
             if r.status_code == 200:
                 text = r.json()["choices"][0]["message"]["content"]
-                logging.info(f"Groq response: {text[:200]}")
+                logging.info(f"Success! Response: {text[:200]}")
                 return text
-            logging.error(f"Groq {model} error {r.status_code}: {r.text[:300]}")
+            elif r.status_code == 429:
+                logging.warning("Rate limited, waiting 30s...")
+                time.sleep(30)
+                continue
+            else:
+                logging.error(f"Error {r.status_code}: {r.text[:300]}")
         except Exception as e:
-            logging.error(f"Groq exception: {e}")
-        time.sleep(2)
+            logging.error(f"Exception calling Groq: {e}")
+        time.sleep(5)
 
     return "ERROR:All Groq models failed"
 
@@ -111,49 +127,51 @@ def parse_json(text):
     return None
 
 def empty(r):
-    return {"fields":{k:"" for k in EXPECTED_KEYS},
-            "field_confidence":{k:"low" for k in EXPECTED_KEYS},
-            "validation":{"_e":{"error":True,"message":r}},
-            "confidence_summary":{"total_extracted":0,"high":0,"medium":0,"low":0,"review_needed":1},
-            "documents_detected":[],"error":r}
+    return {
+        "fields": {k:"" for k in EXPECTED_KEYS},
+        "field_confidence": {k:"low" for k in EXPECTED_KEYS},
+        "validation": {"_e": {"error": True, "message": r}},
+        "confidence_summary": {"total_extracted":0,"high":0,"medium":0,"low":0,"review_needed":1},
+        "documents_detected": [],
+        "error": r
+    }
 
 class DocumentExtractor:
     def __init__(self, api_key):
         self.api_key = api_key.strip()
 
     def process_employee_documents(self, files, hint_name="", date_of_joining=""):
-        images = []
+        all_images = []
         for fn, fd in files:
             imgs = to_images(fd, fn)
-            logging.info(f"{fn}: {len(imgs)} image(s) extracted")
-            images.extend(imgs)
+            logging.info(f"{fn}: {len(imgs)} image(s), sizes: {[len(i) for i in imgs]}")
+            all_images.extend(imgs)
 
-        if not images:
-            return empty("No readable images. Please upload JPG or PNG files.")
+        if not all_images:
+            return empty("No readable images found. Upload JPG or PNG files.")
 
-        logging.info(f"Sending {len(images)} total images to Groq")
+        logging.info(f"Total images: {len(all_images)}, total size: {sum(len(i) for i in all_images)} bytes")
 
-        prompt = f"""You are extracting employee data from Indian HR documents.
-Look carefully at ALL {len(images)} document image(s).
+        prompt = f"""Extract employee data from these Indian HR documents (Aadhaar card, PAN card, bank cheque/passbook).
 Employee name hint: {hint_name}
 Date of joining: {date_of_joining}
 
-Return ONLY this JSON (no explanation, no markdown):
+Return ONLY this JSON object (no text before or after):
 {{
-  "employee_name": "name exactly as on Aadhaar",
-  "father_husband_name": "father or husband name",
+  "employee_name": "name exactly as on Aadhaar card",
+  "father_husband_name": "father name from Aadhaar",
   "gender": "Male or Female",
   "marital_status": "Married or Unmarried",
   "date_of_birth": "DD/MM/YYYY",
   "date_of_joining": "{date_of_joining}",
-  "aadhaar_number": "12 digit aadhaar number",
-  "mobile_number": "10 digit mobile",
-  "pan_number": "PAN like ABCDE1234F",
-  "present_address": "full address from Aadhaar",
-  "permanent_address": "same as present if not specified",
+  "aadhaar_number": "12 digit aadhaar",
+  "mobile_number": "10 digit mobile if visible",
+  "pan_number": "PAN number like ABCDE1234F",
+  "present_address": "full address from Aadhaar back",
+  "permanent_address": "same as present if not separately mentioned",
   "bank_name": "bank name from cheque",
-  "bank_account_number": "account number",
-  "ifsc_code": "IFSC code",
+  "bank_account_number": "account number from cheque",
+  "ifsc_code": "IFSC code from cheque",
   "branch_name": "branch name",
   "uan_number": "",
   "esic_number": "",
@@ -168,7 +186,7 @@ Return ONLY this JSON (no explanation, no markdown):
   "insurance_details": ""
 }}"""
 
-        raw = call_groq(self.api_key, prompt, images)
+        raw = call_groq(self.api_key, prompt, all_images)
 
         if not raw or raw.startswith("ERROR"):
             result = empty(f"API error: {raw[:200] if raw else 'No response'}")
@@ -199,7 +217,13 @@ Return ONLY this JSON (no explanation, no markdown):
         if fields.get("bank_account_number"): docs.append("Bank Document")
         if not docs: docs = ["Documents processed"]
 
-        return {"fields":fields,"field_confidence":fc,"validation":val,
-                "confidence_summary":{"total_extracted":ex,"high":ex,"medium":0,
-                "low":len(EXPECTED_KEYS)-ex,"review_needed":len(val)},
-                "documents_detected":docs}
+        return {
+            "fields": fields,
+            "field_confidence": fc,
+            "validation": val,
+            "confidence_summary": {
+                "total_extracted": ex, "high": ex, "medium": 0,
+                "low": len(EXPECTED_KEYS)-ex, "review_needed": len(val)
+            },
+            "documents_detected": docs
+        }
