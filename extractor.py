@@ -176,20 +176,39 @@ def clean_fields(fields, doj):
             fields[k] = ""
         else:
             fields[k] = str(v).strip()
-    # Aadhaar: normalize to XXXX XXXX XXXX
+
+    # Fix IFSC: position 4 must be digit 0, not letter O (common OCR error)
+    ifsc = fields.get("ifsc_code","").upper().strip()
+    if len(ifsc) >= 5:
+        ifsc = ifsc[:4] + ifsc[4:].replace("O","0",1)
+    fields["ifsc_code"] = ifsc
+
+    # Fix PAN: correct O/0 confusion in specific positions
+    pan = fields.get("pan_number","").upper().strip()
+    if pan and len(pan) == 10:
+        pan_list = list(pan)
+        for i in [5,6,7,8]:   # must be digits
+            if pan_list[i] == "O": pan_list[i] = "0"
+        for i in [0,1,2,3,4,9]: # must be letters
+            if pan_list[i] == "0": pan_list[i] = "O"
+        pan = "".join(pan_list)
+    fields["pan_number"] = pan
+
+    # Fix Aadhaar: normalize digits only
     a = re.sub(r"\D","", fields.get("aadhaar_number",""))
     if len(a) == 12:
         fields["aadhaar_number"] = f"{a[:4]} {a[4:8]} {a[8:]}"
-    # PAN uppercase
-    if fields.get("pan_number"):
-        fields["pan_number"] = fields["pan_number"].upper().strip()
-    # IFSC uppercase
-    if fields.get("ifsc_code"):
-        fields["ifsc_code"] = fields["ifsc_code"].upper().strip()
+    elif len(a) == 11:
+        # Keep for manual correction, mark clearly
+        fields["aadhaar_number"] = a
+        logger.warning(f"Aadhaar 11 digits - manual check needed: {a}")
+    else:
+        fields["aadhaar_number"] = fields.get("aadhaar_number","")
+
     # DOJ fallback
     if doj and not fields.get("date_of_joining"):
         fields["date_of_joining"] = doj
-    # Default PF
+    # Default PF eligibility
     if not fields.get("pf_eligibility"):
         fields["pf_eligibility"] = "ESIC"
     return fields
