@@ -39,26 +39,42 @@ section[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
 section[data-testid="stSidebar"] * { color: #c4cae0 !important; }
 section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2,
 section[data-testid="stSidebar"] h3 { color: #f1f3f9 !important; }
-/* Sidebar nav buttons - match mockup pills */
-section[data-testid="stSidebar"] .stButton { margin-bottom: 4px; }
-section[data-testid="stSidebar"] .stButton button {
+/* Sidebar nav buttons - clean left-aligned single line */
+section[data-testid="stSidebar"] .stButton { margin-bottom: 3px !important; }
+section[data-testid="stSidebar"] .stButton > button {
     background: transparent !important;
     color: #9ca3c4 !important;
     border: none !important;
     border-radius: 9px !important;
     font-weight: 500 !important;
-    font-size: 13px !important;
+    text-align: left !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding: 10px 14px !important;
+    width: 100% !important;
+    min-height: 42px !important;
+    line-height: 1.2 !important;
+    transition: background 0.15s;
+}
+/* Force button text container to align left, single line */
+section[data-testid="stSidebar"] .stButton > button > div,
+section[data-testid="stSidebar"] .stButton > button p {
     text-align: left !important;
     justify-content: flex-start !important;
-    padding: 11px 14px !important;
     width: 100% !important;
-    transition: all 0.15s;
+    margin: 0 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    display: block !important;
 }
-section[data-testid="stSidebar"] .stButton button:hover {
+section[data-testid="stSidebar"] .stButton > button:hover {
     background: #1e2333 !important; color: #f1f3f9 !important;
 }
-section[data-testid="stSidebar"] .stButton button p { font-size: 13px !important; font-weight: 500 !important; }
-/* Active nav button (primary) - indigo like mockup */
+/* Active nav button */
 section[data-testid="stSidebar"] button[kind="primary"] {
     background: #6366f1 !important;
     color: #ffffff !important;
@@ -66,7 +82,8 @@ section[data-testid="stSidebar"] button[kind="primary"] {
 section[data-testid="stSidebar"] button[kind="primary"]:hover {
     background: #4f46e5 !important;
 }
-section[data-testid="stSidebar"] button[kind="primary"] p { color: #ffffff !important; }
+section[data-testid="stSidebar"] button[kind="primary"] p,
+section[data-testid="stSidebar"] button[kind="primary"] div { color: #ffffff !important; }
 section[data-testid="stSidebar"] hr { border-color: #232838 !important; }
 section[data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
 section[data-testid="stSidebar"] [data-testid="stMetricLabel"] { color: #6b7194 !important; }
@@ -196,11 +213,11 @@ def file_hash(files):
 # ══ SIDEBAR NAVIGATION ═════════════════════════════════════════════════════
 NAV = [
     ("Upload", "📤"),
-    ("Joining Dates", "🗓️"),
+    ("Joining Dates", "📅"),
     ("Review", "🔍"),
-    ("Approve & Export", "✔️"),
+    ("Approve & Export", "✅"),
     ("Validation", "📊"),
-    ("Logs", "📄"),
+    ("Logs", "📋"),
     ("Settings", "⚙️"),
 ]
 
