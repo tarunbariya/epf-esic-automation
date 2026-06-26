@@ -1,4 +1,4 @@
-"""EPF/ESIC Registration Automation - Premium Corporate Navy v2"""
+"""EPF/ESIC Registration Automation - Midnight Indigo (sidebar navigation)"""
 import streamlit as st
 import json, time, zipfile, io, hashlib
 from datetime import datetime, date
@@ -13,172 +13,112 @@ logger = logging.getLogger("app")
 st.set_page_config(page_title="EPF & ESIC Automation", page_icon="📋",
                    layout="wide", initial_sidebar_state="expanded")
 
-# ══ PREMIUM CORPORATE THEME ════════════════════════════════════════════════
+# ══ MIDNIGHT INDIGO THEME ══════════════════════════════════════════════════
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-
 html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
-
-/* Page background - midnight */
 .stApp { background: #0f1117; }
 .main .block-container { padding-top: 2rem; max-width: 1280px; }
-
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
-/* Keep header transparent but DON'T hide it - the sidebar toggle lives here */
 header[data-testid="stHeader"] { background: transparent; height: 0; }
-/* Ensure sidebar collapse/expand control is always visible and styled */
 [data-testid="collapsedControl"] {
-    visibility: visible !important;
-    display: block !important;
-    color: #818cf8 !important;
-    background: #161a26 !important;
-    border-radius: 8px;
-    border: 1px solid #2d3350;
+    visibility: visible !important; display: block !important;
+    color: #818cf8 !important; background: #161a26 !important;
+    border-radius: 8px; border: 1px solid #2d3350;
 }
-[data-testid="stSidebarCollapseButton"] { visibility: visible !important; display: block !important; }
-[data-testid="stSidebarCollapseButton"] button { color: #818cf8 !important; }
-/* Sidebar must always be visible */
-section[data-testid="stSidebar"][aria-expanded="false"] { display: flex !important; }
 
-/* ── SIDEBAR - dark panel ── */
+/* ── SIDEBAR ── */
 section[data-testid="stSidebar"] {
     background: #161a26 !important;
     border-right: 1px solid #232838;
-    min-width: 260px !important;
-    visibility: visible !important;
+    min-width: 270px !important;
 }
 section[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
 section[data-testid="stSidebar"] * { color: #c4cae0 !important; }
 section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] h4,
-section[data-testid="stSidebar"] h5 { color: #f1f3f9 !important; font-weight: 600 !important; }
-section[data-testid="stSidebar"] .stTextInput input {
-    background: #0f1117 !important;
-    color: #f1f3f9 !important;
-    border: 1px solid #2d3350 !important;
-    border-radius: 10px !important;
-    padding: 10px 12px !important;
-}
-section[data-testid="stSidebar"] .stTextInput input::placeholder { color: #6b7194 !important; }
+section[data-testid="stSidebar"] h3 { color: #f1f3f9 !important; }
+/* Sidebar nav buttons */
 section[data-testid="stSidebar"] .stButton button {
-    background: #232838 !important;
-    color: #f1f3f9 !important;
-    border: 1px solid #2d3350 !important;
-    border-radius: 10px !important;
+    background: transparent !important;
+    color: #9ca3c4 !important;
+    border: none !important;
+    border-radius: 9px !important;
     font-weight: 500 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 11px 14px !important;
+    width: 100% !important;
+    transition: all 0.15s;
 }
-section[data-testid="stSidebar"] .stButton button:hover { background: #2d3350 !important; }
+section[data-testid="stSidebar"] .stButton button:hover {
+    background: #1e2333 !important; color: #c4cae0 !important;
+}
+/* Active nav button (primary) */
+section[data-testid="stSidebar"] button[kind="primary"] {
+    background: #6366f1 !important;
+    color: #ffffff !important;
+}
+section[data-testid="stSidebar"] button[kind="primary"]:hover {
+    background: #4f46e5 !important;
+}
 section[data-testid="stSidebar"] hr { border-color: #232838 !important; }
 section[data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
 section[data-testid="stSidebar"] [data-testid="stMetricLabel"] { color: #6b7194 !important; }
 
 /* ── METRIC CARDS ── */
 [data-testid="stMetric"] {
-    background: #161a26;
-    border: 1px solid #232838;
-    border-radius: 14px;
-    padding: 18px 20px;
+    background: #161a26; border: 1px solid #232838;
+    border-radius: 14px; padding: 18px 20px;
     transition: transform 0.2s, border-color 0.2s;
 }
 [data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #3d4570; }
 [data-testid="stMetricValue"] { color: #818cf8; font-weight: 700; font-size: 26px; }
 [data-testid="stMetricLabel"] { color: #6b7194; font-weight: 500; }
 
-/* ── TABS - pill ── */
-.stTabs [data-baseweb="tab-list"] {
-    gap: 6px;
-    background: #161a26;
-    border-radius: 14px;
-    padding: 8px;
-    border: 1px solid #232838;
+/* ── BUTTONS (main area) ── */
+.main .stButton button {
+    border-radius: 10px; font-weight: 500; padding: 8px 18px;
+    background: #232838; color: #f1f3f9; border: 1px solid #2d3350;
 }
-.stTabs [data-baseweb="tab"] {
-    border-radius: 10px;
-    padding: 10px 18px;
-    color: #9ca3c4;
-    font-weight: 500;
-    font-size: 14px;
-}
-.stTabs [data-baseweb="tab"]:hover { background: #1e2333; color: #c4cae0; }
-.stTabs [aria-selected="true"] {
-    background: #6366f1 !important;
-    color: #ffffff !important;
-}
-
-/* ── BUTTONS ── */
-.stButton button { border-radius: 10px; font-weight: 500; padding: 8px 18px; transition: all 0.2s; }
-button[kind="primary"] {
-    background: #6366f1 !important;
-    border: none !important;
-    color: #ffffff !important;
-}
-button[kind="primary"]:hover { background: #4f46e5 !important; transform: translateY(-1px); }
-button[kind="secondary"] {
-    background: #161a26 !important;
-    border: 1px solid #2d3350 !important;
-    color: #818cf8 !important;
-}
-.main .stButton button { background: #232838; color: #f1f3f9; border: 1px solid #2d3350; }
 .main .stButton button:hover { background: #2d3350; }
+.main button[kind="primary"] {
+    background: #6366f1 !important; border: none !important; color: #fff !important;
+}
+.main button[kind="primary"]:hover { background: #4f46e5 !important; }
 
 /* ── EXPANDERS ── */
 [data-testid="stExpander"] {
-    border: 1px solid #232838 !important;
-    border-radius: 12px;
-    background: #161a26;
-    margin-bottom: 8px;
+    border: 1px solid #232838 !important; border-radius: 12px;
+    background: #161a26; margin-bottom: 8px;
 }
 [data-testid="stExpander"] summary { color: #f1f3f9 !important; font-weight: 500; padding: 14px 18px; }
 [data-testid="stExpander"] summary:hover { color: #818cf8 !important; }
 
 /* ── FILE UPLOADER ── */
 [data-testid="stFileUploader"] {
-    background: #161a26;
-    border: 2px dashed #3730a3;
-    border-radius: 16px;
-    padding: 20px;
+    background: #161a26; border: 2px dashed #3730a3;
+    border-radius: 16px; padding: 20px;
 }
 [data-testid="stFileUploader"] * { color: #c4cae0 !important; }
-[data-testid="stFileUploader"] button {
-    background: #6366f1 !important; color: #fff !important; border: none !important;
-}
+[data-testid="stFileUploader"] button { background: #6366f1 !important; color: #fff !important; border: none !important; }
 
-/* ── INPUTS in main ── */
+/* ── INPUTS ── */
 .main .stTextInput input, .main input, .main textarea {
-    background: #161a26 !important;
-    color: #f1f3f9 !important;
-    border: 1px solid #232838 !important;
-    border-radius: 10px !important;
+    background: #161a26 !important; color: #f1f3f9 !important;
+    border: 1px solid #232838 !important; border-radius: 10px !important;
 }
 .main .stTextInput input::placeholder { color: #6b7194 !important; }
-
-/* Selectbox */
 .main [data-baseweb="select"] > div {
-    background: #161a26 !important;
-    border: 1px solid #232838 !important;
-    color: #f1f3f9 !important;
+    background: #161a26 !important; border: 1px solid #232838 !important; color: #f1f3f9 !important;
 }
-
-/* Radio */
 .main .stRadio label { color: #c4cae0 !important; }
 
-/* ── ALERTS ── */
 .stSuccess, .stInfo, .stWarning, .stError { border-radius: 12px; }
-
-/* ── HEADINGS & TEXT ── */
 h1,h2,h3,h4 { color: #f1f3f9 !important; font-weight: 600; }
 .main p, .main label, .main span, .main div { color: #c4cae0; }
-.main .stMarkdown { color: #c4cae0; }
-
-/* Date input */
-.main [data-baseweb="input"] { background: #161a26 !important; }
-
-/* Code blocks */
 .stCode, code { background: #0a0c12 !important; color: #a5b4fc !important; }
-
-/* JSON */
 [data-testid="stJson"] { background: #0a0c12 !important; border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
@@ -203,7 +143,7 @@ def save_config(cfg):
 
 cfg = load_config()
 
-for k, v in {"extracted_employees":[], "approved_employees":[], "processing_log":[]}.items():
+for k, v in {"extracted_employees":[], "approved_employees":[], "processing_log":[], "page":"Upload"}.items():
     if k not in st.session_state: st.session_state[k] = v
 
 def detect_employees(zip_bytes):
@@ -249,70 +189,70 @@ def file_hash(files):
         h.update(fn.encode()); h.update(fd[:100])
     return h.hexdigest()
 
-# ══ SIDEBAR - Navigation only ══════════════════════════════════════════════
-with st.sidebar:
-    st.markdown("""<div style="padding:4px 0 20px; border-bottom:1px solid #232838; margin-bottom:20px;">
-    <div style="display:flex; align-items:center; gap:12px;">
-    <div style="width:44px; height:44px; border-radius:12px; background:#6366f1; display:flex; align-items:center; justify-content:center; font-size:22px;">📋</div>
-    <div>
-    <div style="font-size:19px; font-weight:700; color:#ffffff;">EPF · ESIC</div>
-    <div style="font-size:12px; color:#6b7194;">HR automation suite</div>
-    </div></div>
-    </div>""", unsafe_allow_html=True)
+# ══ SIDEBAR NAVIGATION ═════════════════════════════════════════════════════
+NAV = [
+    ("Upload", "📤"),
+    ("Joining Dates", "📅"),
+    ("Review", "🔍"),
+    ("Approve & Export", "✅"),
+    ("Validation", "📊"),
+    ("Logs", "📜"),
+    ("Settings", "⚙️"),
+]
 
-    # Status indicators
+with st.sidebar:
+    st.markdown("""<div style="display:flex; align-items:center; gap:12px; padding:4px 4px 18px; border-bottom:1px solid #232838; margin-bottom:18px;">
+    <div style="width:42px; height:42px; border-radius:11px; background:#6366f1; display:flex; align-items:center; justify-content:center; font-size:20px;">📋</div>
+    <div>
+    <div style="font-size:17px; font-weight:700; color:#f1f3f9;">EPF · ESIC</div>
+    <div style="font-size:11px; color:#6b7194;">HR suite</div>
+    </div></div>""", unsafe_allow_html=True)
+
+    for label, icon in NAV:
+        is_active = st.session_state.page == label
+        if st.button(f"{icon}  {label}", key=f"nav_{label}",
+                     use_container_width=True,
+                     type="primary" if is_active else "secondary"):
+            st.session_state.page = label
+            st.rerun()
+
+    st.divider()
     key_ok = bool(cfg.get("groq_key"))
     url_ok = bool(cfg.get("script_url"))
-    st.markdown(f"""<div style="margin-bottom:20px;">
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px;">
-    <span style="color:{'#5DCAA5' if key_ok else '#EF9F27'};">●</span> AI engine {'connected' if key_ok else 'not set'}</div>
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px;">
-    <span style="color:{'#5DCAA5' if url_ok else '#EF9F27'};">●</span> Google Sheet {'connected' if url_ok else 'not set'}</div>
+    st.markdown(f"""<div style="font-size:12px; padding:2px 4px;">
+    <div style="padding:4px 0;"><span style="color:{'#34d399' if key_ok else '#fbbf24'};">●</span> AI engine {'ready' if key_ok else 'not set'}</div>
+    <div style="padding:4px 0;"><span style="color:{'#34d399' if url_ok else '#fbbf24'};">●</span> Google Sheet {'ready' if url_ok else 'not set'}</div>
     </div>""", unsafe_allow_html=True)
 
-    st.divider()
-    st.markdown("##### Overview")
-    c1,c2 = st.columns(2)
-    c1.metric("Extracted", len(st.session_state.extracted_employees))
-    c2.metric("Approved", len(st.session_state.approved_employees))
-
-    st.divider()
-    if st.button("🗑️ Clear all data", use_container_width=True):
-        st.session_state.extracted_employees = []
-        st.session_state.approved_employees = []
-        st.session_state.processing_log = []
-        st.rerun()
-
-    st.markdown("""<div style="position:relative; margin-top:30px; padding-top:16px; border-top:1px solid #232838; font-size:11px; color:#6b7194;">
+    st.markdown("""<div style="margin-top:20px; padding-top:14px; border-top:1px solid #232838; font-size:11px; color:#6b7194;">
     Vasundhara · HR Portal v2.0</div>""", unsafe_allow_html=True)
 
 # ══ HEADER ═════════════════════════════════════════════════════════════════
-st.markdown("""<div style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4f46e5 100%);
-color:white; padding:26px 32px; border-radius:18px; margin-bottom:24px;
+page = st.session_state.page
+st.markdown(f"""<div style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4f46e5 100%);
+color:white; padding:24px 30px; border-radius:18px; margin-bottom:22px;
 display:flex; justify-content:space-between; align-items:center;
 box-shadow:0 8px 28px rgba(0,0,0,0.4); border:1px solid #3730a3;">
 <div>
-<h1 style="margin:0; font-size:24px; color:#ffffff; font-weight:700;">Employee Onboarding</h1>
-<p style="margin:6px 0 0; opacity:0.85; font-size:13px; color:#c7d2fe;">
-EPF & ESIC registration · AI-powered extraction · All 31 columns auto-filled</p>
+<h1 style="margin:0; font-size:23px; color:#ffffff; font-weight:700;">{page}</h1>
+<p style="margin:5px 0 0; opacity:0.85; font-size:13px; color:#c7d2fe;">
+EPF & ESIC registration · AI-powered extraction</p>
 </div>
-<div style="display:flex; align-items:center; gap:14px;">
+<div style="display:flex; align-items:center; gap:12px;">
 <div style="text-align:right;">
 <div style="font-size:13px; font-weight:600; color:#ffffff;">Tarun Bariya</div>
 <div style="font-size:11px; color:#a5b4fc;">HR Manager</div>
 </div>
-<div style="width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,0.15);
-display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px;">TB</div>
+<div style="width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,0.15);
+display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px;">TB</div>
 </div>
 </div>""", unsafe_allow_html=True)
 
-tabs = st.tabs(["📤 Upload","📅 Joining Dates","🔍 Review","✅ Approve & Export","📊 Validation","📜 Logs","⚙️ Settings"])
-
-# ══ TAB 1: UPLOAD ══════════════════════════════════════════════════════════
-with tabs[0]:
+# ══ PAGE: UPLOAD ═══════════════════════════════════════════════════════════
+if page == "Upload":
     saved_key = cfg.get("groq_key","")
     if not saved_key:
-        st.warning("⚠️ Set up your API key in the **Settings** tab first!")
+        st.warning("⚠️ Set up your API key in the **Settings** page first!")
     else:
         mode = st.radio("Mode", ["Single employee","Batch ZIP (multiple employees)"], horizontal=True)
         files = st.file_uploader("Drop files",
@@ -391,11 +331,10 @@ with tabs[0]:
                     if filled: st.json(filled)
                     else: st.error(f"No data. {emp.get('error','')}")
 
-# ══ TAB 2: JOINING DATES ══════════════════════════════════════════════════
-with tabs[1]:
-    st.markdown("### Individual Joining Dates")
+# ══ PAGE: JOINING DATES ════════════════════════════════════════════════════
+elif page == "Joining Dates":
     if not st.session_state.extracted_employees:
-        st.info("No employees yet.")
+        st.info("No employees yet. Go to Upload page.")
     else:
         for i,emp in enumerate(st.session_state.extracted_employees):
             fields = emp.get("fields",{})
@@ -421,12 +360,11 @@ with tabs[1]:
                     st.session_state.extracted_employees[i]["fields"]["date_of_joining"] = fix_date(ns)
                 st.success("✅")
 
-# ══ TAB 3: REVIEW ══════════════════════════════════════════════════════════
-with tabs[2]:
+# ══ PAGE: REVIEW ═══════════════════════════════════════════════════════════
+elif page == "Review":
     if not st.session_state.extracted_employees:
         st.info("No employees yet.")
     else:
-        st.markdown(f"### Review & Edit — {len(st.session_state.extracted_employees)} employees")
         names = [e.get("fields",{}).get("employee_name") or e.get("group_name",f"Emp {i+1}")
                  for i,e in enumerate(st.session_state.extracted_employees)]
         idx = st.selectbox("Select employee",range(len(names)),format_func=lambda i:names[i])
@@ -465,12 +403,11 @@ with tabs[2]:
             st.session_state.extracted_employees[idx]["fields"] = updated
             st.success("✅ Saved!")
 
-# ══ TAB 4: APPROVE & EXPORT ════════════════════════════════════════════════
-with tabs[3]:
+# ══ PAGE: APPROVE & EXPORT ═════════════════════════════════════════════════
+elif page == "Approve & Export":
     if not st.session_state.extracted_employees:
         st.info("No employees yet.")
     else:
-        st.markdown("### Approve & Export")
         ca,cm1,cm2,cm3 = st.columns(4)
         if ca.button("✅ Approve All", type="primary"):
             for emp in st.session_state.extracted_employees:
@@ -525,9 +462,8 @@ with tabs[3]:
                     file_name=f"epf_esic_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
                     mime="text/csv")
 
-# ══ TAB 5: VALIDATION ══════════════════════════════════════════════════════
-with tabs[4]:
-    st.markdown("### Validation Report")
+# ══ PAGE: VALIDATION ═══════════════════════════════════════════════════════
+elif page == "Validation":
     if not st.session_state.extracted_employees:
         st.info("No employees yet.")
     else:
@@ -545,9 +481,8 @@ with tabs[4]:
                     for field, issue in val.items():
                         st.markdown(f"🔴 **{field}**: {issue}")
 
-# ══ TAB 6: LOGS ════════════════════════════════════════════════════════════
-with tabs[5]:
-    st.markdown("### Processing Logs")
+# ══ PAGE: LOGS ═════════════════════════════════════════════════════════════
+elif page == "Logs":
     if st.session_state.processing_log:
         st.code("\n".join(st.session_state.processing_log))
     lf = Path("logs/automation.log")
@@ -560,60 +495,38 @@ with tabs[5]:
         open(lf,"w").close(); st.session_state.processing_log = []
         st.success("Cleared.")
 
-# ══ TAB 7: SETTINGS ════════════════════════════════════════════════════════
-with tabs[6]:
-    st.markdown("### ⚙️ Configuration")
-    st.caption("Set up your API key and Google Sheet connection. These are stored securely and not shown on the dashboard.")
+# ══ PAGE: SETTINGS ═════════════════════════════════════════════════════════
+elif page == "Settings":
+    st.caption("Set up your API key and Google Sheet connection. These are stored securely and not shown on other pages.")
     st.divider()
-
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("#### 🔑 Groq AI Engine")
-        st.caption("Powers document extraction. Get a free key at console.groq.com")
+        st.caption("Powers document extraction. Free at console.groq.com")
         groq_key = st.text_input("Groq API key", type="password",
                                   value=cfg.get("groq_key",""), placeholder="gsk_...")
         if groq_key != cfg.get("groq_key",""):
-            cfg["groq_key"] = groq_key; save_config(cfg)
-            st.rerun()
-        if cfg.get("groq_key"):
-            st.success("✅ AI engine connected")
-        else:
-            st.warning("⚠️ Not configured")
+            cfg["groq_key"] = groq_key; save_config(cfg); st.rerun()
+        if cfg.get("groq_key"): st.success("✅ AI engine connected")
+        else: st.warning("⚠️ Not configured")
         st.markdown("[Get free Groq key →](https://console.groq.com)")
-
     with col2:
         st.markdown("#### 📊 Google Sheet")
-        st.caption("Where employee data is written. Paste your Apps Script web app URL.")
+        st.caption("Where employee data is written.")
         script_url = st.text_input("Apps Script URL",
                                     value=cfg.get("script_url",""),
                                     placeholder="https://script.google.com/macros/s/.../exec")
         if script_url != cfg.get("script_url",""):
-            cfg["script_url"] = script_url; save_config(cfg)
-            st.rerun()
-        if cfg.get("script_url"):
-            st.success("✅ Google Sheet connected")
-        else:
-            st.warning("⚠️ Not configured")
-
+            cfg["script_url"] = script_url; save_config(cfg); st.rerun()
+        if cfg.get("script_url"): st.success("✅ Google Sheet connected")
+        else: st.warning("⚠️ Not configured")
     st.divider()
-    with st.expander("📖 How to set up Google Sheet integration"):
-        st.markdown("""
-1. Open your Google Sheet → **Extensions → Apps Script**
-2. Delete all code and paste the cell-by-cell write script
-3. **Save → Deploy → New deployment → Web app**
-4. Set **Execute as: Me**, **Access: Anyone**
-5. Copy the web app URL and paste it above
-        """)
-        st.code("""function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var rows = JSON.parse(e.postData.contents).rows;
-  var nextRow = Math.max(sheet.getLastRow()+1, 5);
-  for (var r=0;r<rows.length;r++){
-    for (var c=0;c<rows[r].length;c++){
-      sheet.getRange(nextRow+r, c+1).setValue(String(rows[r][c]||""));
-    }
-  }
-  return ContentService.createTextOutput(
-    JSON.stringify({status:"ok",written:rows.length}))
-    .setMimeType(ContentService.MimeType.JSON);
-}""", language="javascript")
+    cc1, cc2 = st.columns(2)
+    with cc1:
+        if st.button("🗑️ Clear all data"):
+            st.session_state.extracted_employees = []
+            st.session_state.approved_employees = []
+            st.session_state.processing_log = []
+            st.rerun()
+    with cc2:
+        st.metric("Stored employees", len(st.session_state.extracted_employees))
