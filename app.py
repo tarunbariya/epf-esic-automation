@@ -1,4 +1,4 @@
-"""EPF/ESIC Registration Automation - Corporate Navy Theme"""
+"""EPF/ESIC Registration Automation - Premium Corporate Navy v2"""
 import streamlit as st
 import json, time, zipfile, io, hashlib
 from datetime import datetime, date
@@ -13,112 +13,152 @@ logger = logging.getLogger("app")
 st.set_page_config(page_title="EPF & ESIC Automation", page_icon="📋",
                    layout="wide", initial_sidebar_state="expanded")
 
-# ══ CORPORATE NAVY THEME CSS ═══════════════════════════════════════════════
+# ══ PREMIUM CORPORATE THEME ════════════════════════════════════════════════
 st.markdown("""
 <style>
-/* Import font */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
-/* Global */
-html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
-.stApp { background: #f4f5f9; }
+html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
 
-/* Hide Streamlit branding */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
+/* Page background - subtle gradient feel via layered color */
+.stApp {
+    background: linear-gradient(180deg, #eef0f7 0%, #e8eaf3 100%);
+}
+.main .block-container { padding-top: 2rem; max-width: 1280px; }
 
-/* Sidebar - Navy */
+#MainMenu, footer, header {visibility: hidden;}
+
+/* ── SIDEBAR - Deep navy gradient ── */
 section[data-testid="stSidebar"] {
-    background: #26215C;
+    background: linear-gradient(180deg, #1e1a4d 0%, #2d2668 60%, #382f7a 100%);
     border-right: none;
 }
-section[data-testid="stSidebar"] * { color: #CECBF6 !important; }
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 { color: #ffffff !important; }
+section[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
+section[data-testid="stSidebar"] * { color: #d8d5f0 !important; }
+section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 { color: #ffffff !important; font-weight: 600 !important; }
 section[data-testid="stSidebar"] .stTextInput input {
-    background: #1a1640 !important;
+    background: rgba(255,255,255,0.07) !important;
     color: #ffffff !important;
-    border: 1px solid #534AB7 !important;
-    border-radius: 8px !important;
+    border: 1px solid rgba(255,255,255,0.15) !important;
+    border-radius: 10px !important;
+    padding: 10px 12px !important;
 }
-section[data-testid="stSidebar"] .stTextInput input::placeholder { color: #7F77DD !important; }
+section[data-testid="stSidebar"] .stTextInput input::placeholder { color: #9b94d4 !important; }
 section[data-testid="stSidebar"] .stButton button {
-    background: #534AB7 !important;
+    background: rgba(255,255,255,0.1) !important;
     color: #ffffff !important;
-    border: none !important;
-    border-radius: 8px !important;
+    border: 1px solid rgba(255,255,255,0.2) !important;
+    border-radius: 10px !important;
     font-weight: 500 !important;
+    transition: all 0.2s;
 }
-section[data-testid="stSidebar"] .stButton button:hover { background: #7F77DD !important; }
-section[data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #ffffff !important; }
-section[data-testid="stSidebar"] hr { border-color: #534AB7 !important; }
+section[data-testid="stSidebar"] .stButton button:hover {
+    background: rgba(255,255,255,0.2) !important;
+}
+section[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,0.12) !important; }
+section[data-testid="stSidebar"] [data-testid="stMetricValue"] { color: #ffffff !important; font-weight: 700 !important; }
+section[data-testid="stSidebar"] [data-testid="stMetricLabel"] { color: #9b94d4 !important; }
 
-/* Main metrics cards */
+/* ── METRIC CARDS - premium with accent ── */
 [data-testid="stMetric"] {
     background: #ffffff;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 16px 18px;
-    box-shadow: 0 1px 3px rgba(38,33,92,0.04);
+    border: 1px solid #e3e5ef;
+    border-radius: 16px;
+    padding: 20px 22px;
+    box-shadow: 0 2px 12px rgba(30,26,77,0.06);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
-[data-testid="stMetricValue"] { color: #26215C; font-weight: 600; }
-[data-testid="stMetricLabel"] { color: #6b7280; }
+[data-testid="stMetric"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(30,26,77,0.1);
+}
+[data-testid="stMetricValue"] { color: #1e1a4d; font-weight: 700; font-size: 28px; }
+[data-testid="stMetricLabel"] { color: #7c7a99; font-weight: 500; }
 
-/* Tabs - navy underline */
+/* ── TABS - pill style ── */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 4px;
+    gap: 6px;
     background: #ffffff;
-    border-radius: 12px;
-    padding: 6px;
-    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    padding: 8px;
+    border: 1px solid #e3e5ef;
+    box-shadow: 0 2px 8px rgba(30,26,77,0.04);
 }
 .stTabs [data-baseweb="tab"] {
-    border-radius: 8px;
-    padding: 8px 16px;
-    color: #6b7280;
+    border-radius: 10px;
+    padding: 10px 18px;
+    color: #7c7a99;
     font-weight: 500;
+    font-size: 14px;
 }
+.stTabs [data-baseweb="tab"]:hover { background: #f4f2fd; color: #534AB7; }
 .stTabs [aria-selected="true"] {
-    background: #26215C !important;
+    background: linear-gradient(135deg, #534AB7 0%, #6b5fd1 100%) !important;
     color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(83,74,183,0.3);
 }
 
-/* Buttons in main area */
+/* ── BUTTONS ── */
 .stButton button {
-    border-radius: 8px;
+    border-radius: 10px;
     font-weight: 500;
+    padding: 8px 18px;
+    transition: all 0.2s;
 }
 button[kind="primary"] {
-    background: #534AB7 !important;
+    background: linear-gradient(135deg, #534AB7 0%, #6b5fd1 100%) !important;
     border: none !important;
+    box-shadow: 0 2px 10px rgba(83,74,183,0.3) !important;
 }
-button[kind="primary"]:hover { background: #26215C !important; }
+button[kind="primary"]:hover {
+    box-shadow: 0 4px 16px rgba(83,74,183,0.4) !important;
+    transform: translateY(-1px);
+}
+button[kind="secondary"] {
+    background: #ffffff !important;
+    border: 1px solid #d8d5ef !important;
+    color: #534AB7 !important;
+}
 
-/* Expander */
-.streamlit-expanderHeader {
+/* ── EXPANDERS - premium cards ── */
+.streamlit-expanderHeader, [data-testid="stExpander"] summary {
     background: #ffffff;
-    border-radius: 10px;
-    border: 1px solid #e5e7eb;
-    font-weight: 500;
-}
-
-/* File uploader */
-[data-testid="stFileUploader"] {
-    background: #EEEDFE;
-    border: 2px dashed #AFA9EC;
     border-radius: 12px;
-    padding: 16px;
+    border: 1px solid #e3e5ef;
+    font-weight: 500;
+    padding: 14px 18px;
+}
+[data-testid="stExpander"] {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(30,26,77,0.04);
+    margin-bottom: 8px;
 }
 
-/* Success/info/warning boxes */
-.stSuccess { border-radius: 10px; }
-.stInfo { border-radius: 10px; }
-.stWarning { border-radius: 10px; }
+/* ── FILE UPLOADER ── */
+[data-testid="stFileUploader"] {
+    background: linear-gradient(135deg, #f0eefc 0%, #e8e4fa 100%);
+    border: 2px dashed #AFA9EC;
+    border-radius: 16px;
+    padding: 20px;
+}
+[data-testid="stFileUploader"] * { color: #4a4080 !important; }
 
-/* Headers */
-h1, h2, h3 { color: #26215C; font-weight: 600; }
+/* ── INPUTS in main ── */
+.main .stTextInput input, .main .stSelectbox select {
+    border-radius: 10px;
+    border: 1px solid #e3e5ef;
+}
+
+/* ── ALERTS ── */
+.stSuccess, .stInfo, .stWarning, .stError { border-radius: 12px; }
+
+/* ── HEADINGS ── */
+h1,h2,h3 { color: #1e1a4d; font-weight: 600; }
+
+/* JSON display */
+.stJson { border-radius: 12px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -180,7 +220,6 @@ def detect_employees(zip_bytes):
     if not employee_folders:
         for fk, files in folder_files.items():
             employee_folders.setdefault(fk.split("/")[0],[]).extend(files)
-    logger.info(f"ZIP detected {len(employee_folders)} employees")
     return employee_folders
 
 def file_hash(files):
@@ -189,160 +228,147 @@ def file_hash(files):
         h.update(fn.encode()); h.update(fd[:100])
     return h.hexdigest()
 
-# ══ SIDEBAR ════════════════════════════════════════════════════════════════
+# ══ SIDEBAR - Navigation only ══════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("""<div style="padding:8px 0 16px; border-bottom:1px solid #534AB7; margin-bottom:16px;">
-    <div style="font-size:20px; font-weight:600; color:#ffffff;">EPF · ESIC</div>
-    <div style="font-size:12px; color:#AFA9EC;">HR automation suite</div>
+    st.markdown("""<div style="padding:4px 0 20px; border-bottom:1px solid rgba(255,255,255,0.12); margin-bottom:20px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+    <div style="width:44px; height:44px; border-radius:12px; background:rgba(255,255,255,0.15); display:flex; align-items:center; justify-content:center; font-size:22px;">📋</div>
+    <div>
+    <div style="font-size:19px; font-weight:700; color:#ffffff;">EPF · ESIC</div>
+    <div style="font-size:12px; color:#9b94d4;">HR automation suite</div>
+    </div></div>
     </div>""", unsafe_allow_html=True)
 
-    if cfg.get("groq_key") or cfg.get("script_url"):
-        st.success("✅ Settings loaded")
-
-    st.markdown("### 🔑 API Key")
-    groq_key = st.text_input("Groq API key", type="password",
-                              value=cfg.get("groq_key",""), placeholder="gsk_...",
-                              label_visibility="collapsed")
-    if groq_key != cfg.get("groq_key",""):
-        cfg["groq_key"] = groq_key; save_config(cfg)
-    if cfg.get("groq_key"): st.success("✅ Key ready")
-    st.caption("[Get free key →](https://console.groq.com)")
+    # Status indicators
+    key_ok = bool(cfg.get("groq_key"))
+    url_ok = bool(cfg.get("script_url"))
+    st.markdown(f"""<div style="margin-bottom:20px;">
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px;">
+    <span style="color:{'#5DCAA5' if key_ok else '#EF9F27'};">●</span> AI engine {'connected' if key_ok else 'not set'}</div>
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; font-size:13px;">
+    <span style="color:{'#5DCAA5' if url_ok else '#EF9F27'};">●</span> Google Sheet {'connected' if url_ok else 'not set'}</div>
+    </div>""", unsafe_allow_html=True)
 
     st.divider()
-    st.markdown("### 📊 Google Sheet")
-    script_url = st.text_input("Apps Script URL",
-                                value=cfg.get("script_url",""),
-                                placeholder="https://script.google.com/...",
-                                label_visibility="collapsed")
-    if script_url != cfg.get("script_url",""):
-        cfg["script_url"] = script_url; save_config(cfg)
-    if cfg.get("script_url"): st.success("✅ Sheet connected")
-
-    st.divider()
+    st.markdown("##### Overview")
     c1,c2 = st.columns(2)
     c1.metric("Extracted", len(st.session_state.extracted_employees))
     c2.metric("Approved", len(st.session_state.approved_employees))
 
-    if st.button("🗑️ Clear all data"):
+    st.divider()
+    if st.button("🗑️ Clear all data", use_container_width=True):
         st.session_state.extracted_employees = []
         st.session_state.approved_employees = []
         st.session_state.processing_log = []
         st.rerun()
 
+    st.markdown("""<div style="position:relative; margin-top:30px; padding-top:16px; border-top:1px solid rgba(255,255,255,0.12); font-size:11px; color:#9b94d4;">
+    Vasundhara · HR Portal v2.0</div>""", unsafe_allow_html=True)
+
 # ══ HEADER ═════════════════════════════════════════════════════════════════
-st.markdown("""<div style="background:#26215C; color:white; padding:20px 28px;
-border-radius:14px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+st.markdown("""<div style="background:linear-gradient(135deg, #1e1a4d 0%, #2d2668 50%, #534AB7 100%);
+color:white; padding:26px 32px; border-radius:18px; margin-bottom:24px;
+display:flex; justify-content:space-between; align-items:center;
+box-shadow:0 8px 28px rgba(30,26,77,0.25);">
 <div>
-<h1 style="margin:0; font-size:22px; color:#ffffff;">Employee Onboarding</h1>
-<p style="margin:4px 0 0; opacity:0.8; font-size:13px; color:#CECBF6;">
-EPF & ESIC registration · AI-powered extraction · All 31 columns</p>
+<h1 style="margin:0; font-size:24px; color:#ffffff; font-weight:700;">Employee Onboarding</h1>
+<p style="margin:6px 0 0; opacity:0.85; font-size:13px; color:#d8d5f0;">
+EPF & ESIC registration · AI-powered extraction · All 31 columns auto-filled</p>
 </div>
-<div style="width:42px; height:42px; border-radius:50%; background:#534AB7;
-display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px;">TB</div>
+<div style="display:flex; align-items:center; gap:14px;">
+<div style="text-align:right;">
+<div style="font-size:13px; font-weight:600; color:#ffffff;">Tarun Bariya</div>
+<div style="font-size:11px; color:#9b94d4;">HR Manager</div>
+</div>
+<div style="width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,0.18);
+display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px;">TB</div>
+</div>
 </div>""", unsafe_allow_html=True)
 
-tabs = st.tabs(["📤 Upload","📅 Joining Dates","🔍 Review","✅ Approve & Export","📊 Validation","📜 Logs"])
+tabs = st.tabs(["📤 Upload","📅 Joining Dates","🔍 Review","✅ Approve & Export","📊 Validation","📜 Logs","⚙️ Settings"])
 
 # ══ TAB 1: UPLOAD ══════════════════════════════════════════════════════════
 with tabs[0]:
     saved_key = cfg.get("groq_key","")
     if not saved_key:
-        st.warning("⚠️ Enter Groq API key in sidebar first!")
-        st.stop()
-
-    mode = st.radio("Mode", ["Single employee","Batch ZIP (multiple employees)"], horizontal=True)
-    files = st.file_uploader("Drop files",
-        type=["pdf","jpg","jpeg","png","webp","zip","bmp","docx","heic","tiff"],
-        accept_multiple_files=True)
-
-    if mode == "Single employee":
-        emp_hint = st.text_input("Employee name hint", placeholder="e.g. Krupal Patel")
-        doj_val = str(st.date_input("Date of Joining"))
+        st.warning("⚠️ Set up your API key in the **Settings** tab first!")
     else:
-        emp_hint, doj_val = "", ""
-        st.info("ZIP structure: each employee in their own folder. Supports PDF, JPG, PNG, screenshots, photos, DOCX.")
-
-    if files:
-        for f in files:
-            st.caption(f"{'📦' if 'zip' in f.type else '📄' if 'pdf' in f.type else '🖼️'} {f.name} ({round(f.size/1024,1)} KB)")
-
-    st.divider()
-    if st.button("🚀 Extract Data with AI", type="primary", disabled=not files):
-        from extractor import DocumentExtractor
-        extractor = DocumentExtractor(saved_key)
-        prog = st.progress(0)
-        status = st.empty()
-
+        mode = st.radio("Mode", ["Single employee","Batch ZIP (multiple employees)"], horizontal=True)
+        files = st.file_uploader("Drop files",
+            type=["pdf","jpg","jpeg","png","webp","zip","bmp","docx","heic","tiff"],
+            accept_multiple_files=True)
         if mode == "Single employee":
-            groups = {"Employee_1": [(uf.name, uf.read()) for uf in files]}
+            emp_hint = st.text_input("Employee name hint", placeholder="e.g. Krupal Patel")
+            doj_val = str(st.date_input("Date of Joining"))
         else:
-            groups = {}
-            for uf in files:
-                if uf.name.lower().endswith(".zip"):
-                    status.text(f"📦 Scanning {uf.name}...")
-                    detected = detect_employees(uf.read())
-                    if detected:
-                        st.success(f"Found **{len(detected)} employee(s)**: {', '.join(list(detected.keys()))}")
-                        for name, flist in detected.items():
-                            groups.setdefault(name,[]).extend(flist)
+            emp_hint, doj_val = "", ""
+            st.info("ZIP structure: each employee in their own folder. Supports PDF, JPG, PNG, screenshots, photos, DOCX.")
+        if files:
+            for f in files:
+                st.caption(f"{'📦' if 'zip' in f.type else '📄' if 'pdf' in f.type else '🖼️'} {f.name} ({round(f.size/1024,1)} KB)")
+        st.divider()
+        if st.button("🚀 Extract Data with AI", type="primary", disabled=not files):
+            from extractor import DocumentExtractor
+            extractor = DocumentExtractor(saved_key)
+            prog = st.progress(0); status = st.empty()
+            if mode == "Single employee":
+                groups = {"Employee_1": [(uf.name, uf.read()) for uf in files]}
+            else:
+                groups = {}
+                for uf in files:
+                    if uf.name.lower().endswith(".zip"):
+                        status.text(f"📦 Scanning {uf.name}...")
+                        detected = detect_employees(uf.read())
+                        if detected:
+                            st.success(f"Found **{len(detected)} employee(s)**: {', '.join(list(detected.keys()))}")
+                            for name, flist in detected.items():
+                                groups.setdefault(name,[]).extend(flist)
+                        else: st.error("No employee folders found!")
                     else:
-                        st.error("No employee folders found in ZIP!")
-                else:
-                    groups.setdefault("Other",[]).append((uf.name, uf.read()))
-
-        if not groups:
-            st.error("No files to process!"); st.stop()
-
-        existing_hashes = {e.get("file_hash","") for e in st.session_state.extracted_employees}
-        existing_names = {e.get("group_name","") for e in st.session_state.extracted_employees}
-        to_process = {}
-        for k,v in groups.items():
-            h = file_hash(v)
-            if k in existing_names: st.warning(f"Skipping {k} — already extracted")
-            elif h in existing_hashes: st.warning(f"Skipping {k} — duplicate files")
-            else: to_process[k] = (v, h)
-
-        if not to_process:
-            st.info("All employees already extracted!"); st.stop()
-
-        st.info(f"Processing **{len(to_process)}** employee(s)...")
-        new_emps = []
-        total = len(to_process)
-        for idx, (grp, (gfiles, ghash)) in enumerate(to_process.items()):
-            prog.progress(idx/total)
-            status.text(f"🤖 AI reading: {grp} ({idx+1}/{total})...")
-            hint = emp_hint if mode=="Single employee" else grp
-            try:
-                result = extractor.process_employee_documents(gfiles, hint_name=hint, date_of_joining=doj_val)
-            except Exception as e:
-                from extractor import EXPECTED_KEYS
-                result = {"fields":{k:"" for k in EXPECTED_KEYS},
-                          "confidence_summary":{"total_extracted":0},"error":str(e),
-                          "documents_detected":[],"field_confidence":{},"validation":{}}
-            result["group_name"] = grp
-            result["file_hash"] = ghash
-            result["processed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            result["joining_date_override"] = doj_val
-            new_emps.append(result)
-            ex = result.get("confidence_summary",{}).get("total_extracted",0)
-            logger.info(f"Extracted {grp}: {ex} fields")
-            st.session_state.processing_log.append(
-                f"{datetime.now().strftime('%H:%M:%S')} — {grp}: {ex} fields, {result.get('documents_detected',[])}")
-            if idx < total-1: time.sleep(8)
-
-        prog.progress(1.0)
-        st.session_state.extracted_employees.extend(new_emps)
-        status.text(f"✅ Done! {len(new_emps)} employees processed.")
-        st.success(f"✅ **{len(new_emps)} employee records created!**")
-
-        for emp in new_emps:
-            f = emp.get("fields",{})
-            cs = emp.get("confidence_summary",{})
-            name = f.get("employee_name") or emp["group_name"]
-            filled = {k:v for k,v in f.items() if v}
-            with st.expander(f"👤 {name} — {cs.get('total_extracted',0)} fields", expanded=True):
-                if filled: st.json(filled)
-                else: st.error(f"No data. {emp.get('error','')}")
+                        groups.setdefault("Other",[]).append((uf.name, uf.read()))
+            if not groups: st.error("No files!"); st.stop()
+            existing_hashes = {e.get("file_hash","") for e in st.session_state.extracted_employees}
+            existing_names = {e.get("group_name","") for e in st.session_state.extracted_employees}
+            to_process = {}
+            for k,v in groups.items():
+                h = file_hash(v)
+                if k in existing_names: st.warning(f"Skipping {k} — already extracted")
+                elif h in existing_hashes: st.warning(f"Skipping {k} — duplicate")
+                else: to_process[k] = (v, h)
+            if not to_process: st.info("All already extracted!"); st.stop()
+            st.info(f"Processing **{len(to_process)}** employee(s)...")
+            new_emps = []; total = len(to_process)
+            for idx, (grp, (gfiles, ghash)) in enumerate(to_process.items()):
+                prog.progress(idx/total)
+                status.text(f"🤖 AI reading: {grp} ({idx+1}/{total})...")
+                hint = emp_hint if mode=="Single employee" else grp
+                try:
+                    result = extractor.process_employee_documents(gfiles, hint_name=hint, date_of_joining=doj_val)
+                except Exception as e:
+                    from extractor import EXPECTED_KEYS
+                    result = {"fields":{k:"" for k in EXPECTED_KEYS},
+                              "confidence_summary":{"total_extracted":0},"error":str(e),
+                              "documents_detected":[],"field_confidence":{},"validation":{}}
+                result["group_name"]=grp; result["file_hash"]=ghash
+                result["processed_at"]=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                result["joining_date_override"]=doj_val
+                new_emps.append(result)
+                ex = result.get("confidence_summary",{}).get("total_extracted",0)
+                logger.info(f"Extracted {grp}: {ex} fields")
+                st.session_state.processing_log.append(
+                    f"{datetime.now().strftime('%H:%M:%S')} — {grp}: {ex} fields")
+                if idx < total-1: time.sleep(8)
+            prog.progress(1.0)
+            st.session_state.extracted_employees.extend(new_emps)
+            status.text(f"✅ Done! {len(new_emps)} processed.")
+            st.success(f"✅ **{len(new_emps)} employee records created!**")
+            for emp in new_emps:
+                f = emp.get("fields",{}); cs = emp.get("confidence_summary",{})
+                name = f.get("employee_name") or emp["group_name"]
+                filled = {k:v for k,v in f.items() if v}
+                with st.expander(f"👤 {name} — {cs.get('total_extracted',0)} fields", expanded=True):
+                    if filled: st.json(filled)
+                    else: st.error(f"No data. {emp.get('error','')}")
 
 # ══ TAB 2: JOINING DATES ══════════════════════════════════════════════════
 with tabs[1]:
@@ -384,10 +410,8 @@ with tabs[2]:
                  for i,e in enumerate(st.session_state.extracted_employees)]
         idx = st.selectbox("Select employee",range(len(names)),format_func=lambda i:names[i])
         emp = st.session_state.extracted_employees[idx]
-        fields = emp.get("fields",{})
-        conf = emp.get("field_confidence",{})
-        val = emp.get("validation",{})
-        docs = emp.get("documents_detected",[])
+        fields = emp.get("fields",{}); conf = emp.get("field_confidence",{})
+        val = emp.get("validation",{}); docs = emp.get("documents_detected",[])
         if docs: st.markdown("**Detected:** " + " · ".join(f"`{d}`" for d in docs))
         if val:
             st.warning(f"⚠️ {len(val)} issue(s): " + "; ".join(f"{k}: {v}" for k,v in val.items()))
@@ -411,13 +435,12 @@ with tabs[2]:
             c1,c2 = st.columns(2)
             for i,(fk,fl) in enumerate(sfs):
                 with (c1 if i%2==0 else c2):
-                    cl = conf.get(fk,"low")
-                    ve = val.get(fk,"")
+                    cl = conf.get(fk,"low"); ve = val.get(fk,"")
                     badge = {"high":"🟢","medium":"🟡","low":"⚪"}.get(cl,"⚪")
                     if ve: badge = "🔴"
                     updated[fk] = st.text_input(f"{badge} {fl}",
                         value=str(fields.get(fk,"") or ""), key=f"rv_{idx}_{fk}", help=ve or "")
-        if st.button("💾 Save Changes"):
+        if st.button("💾 Save Changes", type="primary"):
             st.session_state.extracted_employees[idx]["fields"] = updated
             st.success("✅ Saved!")
 
@@ -428,13 +451,13 @@ with tabs[3]:
     else:
         st.markdown("### Approve & Export")
         ca,cm1,cm2,cm3 = st.columns(4)
-        if ca.button("✅ Approve All"):
+        if ca.button("✅ Approve All", type="primary"):
             for emp in st.session_state.extracted_employees:
                 name = emp.get("fields",{}).get("employee_name") or emp.get("group_name","")
                 if not any(a.get("fields",{}).get("employee_name")==name
                            for a in st.session_state.approved_employees):
                     st.session_state.approved_employees.append(emp)
-            st.success(f"All approved!"); st.rerun()
+            st.success("All approved!"); st.rerun()
         cm1.metric("Total",len(st.session_state.extracted_employees))
         cm2.metric("Approved",len(st.session_state.approved_employees))
         cm3.metric("Pending",len(st.session_state.extracted_employees)-len(st.session_state.approved_employees))
@@ -460,16 +483,16 @@ with tabs[3]:
         with col_a:
             st.markdown("#### 📊 Push to Google Sheet")
             url = cfg.get("script_url","")
-            if not url: st.warning("Enter Apps Script URL in sidebar.")
+            if not url: st.warning("Set Apps Script URL in Settings.")
             elif not st.session_state.approved_employees: st.info("Approve employees first.")
             else:
-                if st.button(f"📊 Push {len(st.session_state.approved_employees)} records"):
+                if st.button(f"📊 Push {len(st.session_state.approved_employees)} records", type="primary"):
                     from sheets_writer import SheetsWriter
                     try:
                         with st.spinner("Writing all 31 columns..."):
                             w = SheetsWriter(url)
                             n = w.write_employees(st.session_state.approved_employees)
-                        st.success(f"✅ {n} records written with all 31 columns!")
+                        st.success(f"✅ {n} records written!")
                     except Exception as e: st.error(f"Error: {e}")
         with col_b:
             st.markdown("#### ⬇️ Download CSV")
@@ -490,8 +513,7 @@ with tabs[4]:
         for emp in st.session_state.extracted_employees:
             f = emp.get("fields",{})
             name = f.get("employee_name") or emp.get("group_name","Unknown")
-            val = emp.get("validation",{})
-            cs = emp.get("confidence_summary",{})
+            val = emp.get("validation",{}); cs = emp.get("confidence_summary",{})
             with st.expander(f"👤 {name} — {cs.get('total_extracted',0)} fields | {len(val)} issues"):
                 c1,c2,c3,c4 = st.columns(4)
                 c1.metric("Fields", cs.get("total_extracted",0))
@@ -512,9 +534,65 @@ with tabs[5]:
         with open(lf,encoding="utf-8",errors="ignore") as f:
             lines = f.readlines()
         st.code("".join(lines[-100:]))
-    else:
-        st.info("Log appears after processing.")
+    else: st.info("Log appears after processing.")
     if st.button("🗑️ Clear Logs"):
-        open(lf,"w").close()
-        st.session_state.processing_log = []
+        open(lf,"w").close(); st.session_state.processing_log = []
         st.success("Cleared.")
+
+# ══ TAB 7: SETTINGS ════════════════════════════════════════════════════════
+with tabs[6]:
+    st.markdown("### ⚙️ Configuration")
+    st.caption("Set up your API key and Google Sheet connection. These are stored securely and not shown on the dashboard.")
+    st.divider()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### 🔑 Groq AI Engine")
+        st.caption("Powers document extraction. Get a free key at console.groq.com")
+        groq_key = st.text_input("Groq API key", type="password",
+                                  value=cfg.get("groq_key",""), placeholder="gsk_...")
+        if groq_key != cfg.get("groq_key",""):
+            cfg["groq_key"] = groq_key; save_config(cfg)
+            st.rerun()
+        if cfg.get("groq_key"):
+            st.success("✅ AI engine connected")
+        else:
+            st.warning("⚠️ Not configured")
+        st.markdown("[Get free Groq key →](https://console.groq.com)")
+
+    with col2:
+        st.markdown("#### 📊 Google Sheet")
+        st.caption("Where employee data is written. Paste your Apps Script web app URL.")
+        script_url = st.text_input("Apps Script URL",
+                                    value=cfg.get("script_url",""),
+                                    placeholder="https://script.google.com/macros/s/.../exec")
+        if script_url != cfg.get("script_url",""):
+            cfg["script_url"] = script_url; save_config(cfg)
+            st.rerun()
+        if cfg.get("script_url"):
+            st.success("✅ Google Sheet connected")
+        else:
+            st.warning("⚠️ Not configured")
+
+    st.divider()
+    with st.expander("📖 How to set up Google Sheet integration"):
+        st.markdown("""
+1. Open your Google Sheet → **Extensions → Apps Script**
+2. Delete all code and paste the cell-by-cell write script
+3. **Save → Deploy → New deployment → Web app**
+4. Set **Execute as: Me**, **Access: Anyone**
+5. Copy the web app URL and paste it above
+        """)
+        st.code("""function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var rows = JSON.parse(e.postData.contents).rows;
+  var nextRow = Math.max(sheet.getLastRow()+1, 5);
+  for (var r=0;r<rows.length;r++){
+    for (var c=0;c<rows[r].length;c++){
+      sheet.getRange(nextRow+r, c+1).setValue(String(rows[r][c]||""));
+    }
+  }
+  return ContentService.createTextOutput(
+    JSON.stringify({status:"ok",written:rows.length}))
+    .setMimeType(ContentService.MimeType.JSON);
+}""", language="javascript")
