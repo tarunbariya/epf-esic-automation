@@ -229,12 +229,22 @@ with st.sidebar:
 
 # ══ HEADER ═════════════════════════════════════════════════════════════════
 page = st.session_state.page
+PAGE_TITLES = {
+    "Upload": "Employee Onboarding",
+    "Joining Dates": "Joining Dates",
+    "Review": "Review & Edit",
+    "Approve & Export": "Approve & Export",
+    "Validation": "Validation Report",
+    "Logs": "Processing Logs",
+    "Settings": "Configuration",
+}
+header_title = PAGE_TITLES.get(page, page)
 st.markdown(f"""<div style="background:linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4f46e5 100%);
 color:white; padding:24px 30px; border-radius:18px; margin-bottom:22px;
 display:flex; justify-content:space-between; align-items:center;
 box-shadow:0 8px 28px rgba(0,0,0,0.4); border:1px solid #3730a3;">
 <div>
-<h1 style="margin:0; font-size:23px; color:#ffffff; font-weight:700;">{page}</h1>
+<h1 style="margin:0; font-size:23px; color:#ffffff; font-weight:700;">{header_title}</h1>
 <p style="margin:5px 0 0; opacity:0.85; font-size:13px; color:#c7d2fe;">
 EPF & ESIC registration · AI-powered extraction</p>
 </div>
