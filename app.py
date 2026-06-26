@@ -24,12 +24,30 @@ html, body, [class*="css"] { font-family: 'Plus Jakarta Sans', sans-serif; }
 .stApp { background: #0f1117; }
 .main .block-container { padding-top: 2rem; max-width: 1280px; }
 
-#MainMenu, footer, header {visibility: hidden;}
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+/* Keep header transparent but DON'T hide it - the sidebar toggle lives here */
+header[data-testid="stHeader"] { background: transparent; height: 0; }
+/* Ensure sidebar collapse/expand control is always visible and styled */
+[data-testid="collapsedControl"] {
+    visibility: visible !important;
+    display: block !important;
+    color: #818cf8 !important;
+    background: #161a26 !important;
+    border-radius: 8px;
+    border: 1px solid #2d3350;
+}
+[data-testid="stSidebarCollapseButton"] { visibility: visible !important; display: block !important; }
+[data-testid="stSidebarCollapseButton"] button { color: #818cf8 !important; }
+/* Sidebar must always be visible */
+section[data-testid="stSidebar"][aria-expanded="false"] { display: flex !important; }
 
 /* ── SIDEBAR - dark panel ── */
 section[data-testid="stSidebar"] {
-    background: #161a26;
+    background: #161a26 !important;
     border-right: 1px solid #232838;
+    min-width: 260px !important;
+    visibility: visible !important;
 }
 section[data-testid="stSidebar"] > div { padding-top: 1.5rem; }
 section[data-testid="stSidebar"] * { color: #c4cae0 !important; }
