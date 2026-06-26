@@ -251,6 +251,15 @@ display:flex; align-items:center; justify-content:center; font-weight:700; font-
 # ══ PAGE: UPLOAD ═══════════════════════════════════════════════════════════
 if page == "Upload":
     saved_key = cfg.get("groq_key","")
+    # Metric cards row (matches mockup)
+    total = len(st.session_state.extracted_employees)
+    approved = len(st.session_state.approved_employees)
+    pending = total - approved
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Extracted", total)
+    m2.metric("Approved", approved)
+    m3.metric("Pending", pending)
+    st.markdown("<div style='margin:8px 0;'></div>", unsafe_allow_html=True)
     if not saved_key:
         st.warning("⚠️ Set up your API key in the **Settings** page first!")
     else:
